@@ -1,0 +1,114 @@
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { LogIn, Lock, User } from 'lucide-react';
+import { BrandLogo, Button, Icon, Input } from '@shared/components';
+import { AuthShell } from '../components/AuthShell';
+import { loginSchema, type LoginSchema } from '../schemas/login.schema';
+import { useAuth } from '../hooks/useAuth';
+
+export const LoginPage = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { isAuthenticated, login, isLoggingIn } = useAuth();
+  const [searchParams] = useSearchParams();
+  const accessReason = searchParams.get('reason');
+  const from =
+    (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ||
+    '/';
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<LoginSchema>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: {
+      username: '',
+      password: '',
+    },
+  });
+
+  if (isAuthenticated) {
+    return <Navigate to={from} replace />;
+  }
+
+  const onSubmit = (data: LoginSchema) => {
+    login(data, {
+      onSuccess: () => navigate(from, { replace: true }),
+    });
+  };
+
+  return (
+    <AuthShell>
+      <div className="mb-8 flex flex-col items-center text-center">
+        <BrandLogo
+          size="lg"
+          inverted
+          showText={false}
+          className="flex-col !gap-4"
+        />
+        <div className="mt-4 text-center">
+          <p className="text-lg font-bold text-white">ولاء</p>
+          <p className="mt-4 text-sm text-white/75">
+            نظام ولاء للمقاهي والمتاجر — سجّل الدخول للمتابعة
+          </p>
+        </div>
+      </div>
+
+      <form
+        onSubmit={handleSubmit(onSubmit)}
+        className="panel gold-glow space-y-5 border-wheat/30 bg-panel/95 p-6 backdrop-blur-md sm:p-8"
+      >
+        <div className="mb-1">
+          <h1 className="text-lg font-bold text-ink">تسجيل الدخول</h1>
+          <p className="mt-1 text-xs text-muted">أدخل بيانات حسابك للمتابعة</p>
+        </div>
+
+        {accessReason === 'expired' && (
+          <div className="rounded-xl border border-umber/25 bg-umber/8 px-3 py-3 text-sm font-bold text-ink">
+            انتهى حجز النظام. سجّل الدخول بعد تجديد المدة من الإدارة.
+          </div>
+        )}
+        {accessReason === 'inactive' && (
+          <div className="rounded-xl border border-danger/20 bg-danger-soft px-3 py-3 text-sm font-bold text-ink">
+            هذا الحساب معطّل ولا يمكن استخدام النظام.
+          </div>
+        )}
+
+        <div>
+          <label className="mb-2 flex items-center gap-2 text-sm font-medium text-ink">
+            <Icon icon={User} size="sm" className="text-muted" />
+            اسم المستخدم
+          </label>
+          <Input
+            type="text"
+            autoComplete="username"
+            placeholder="admin"
+            error={errors.username?.message}
+            {...register('username')}
+          />
+        </div>
+
+        <div>
+          <label className="mb-2 flex items-center gap-2 text-sm font-medium text-ink">
+            <Icon icon={Lock} size="sm" className="text-muted" />
+            كلمة المرور
+          </label>
+          <Input
+            type="password"
+            autoComplete="current-password"
+            placeholder="••••••••"
+            error={errors.password?.message}
+            {...register('password')}
+          />
+        </div>
+
+        <Button type="submit" className="w-full" size="lg" disabled={isLoggingIn}>
+          <Icon icon={LogIn} size="sm" />
+          {isLoggingIn ? 'جاري تسجيل الدخول...' : 'تسجيل الدخول'}
+        </Button>
+      </form>
+    </AuthShell>
+  );
+};
