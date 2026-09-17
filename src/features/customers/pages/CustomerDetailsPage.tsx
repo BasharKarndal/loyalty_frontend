@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import QRCode from 'react-qr-code';
 import {
   AlertCircle,
   ArrowRight,
@@ -17,7 +16,7 @@ import {
   Modal,
   RouteFallback,
 } from '@shared/components';
-import { encodeCustomerQr, formatNumber } from '@shared/lib/format';
+import { formatNumber } from '@shared/lib/format';
 import {
   loyaltyEligible,
   loyaltyProgress,
@@ -33,6 +32,7 @@ import {
   CustomerProfileHeader,
   CustomerStatsRow,
 } from '../components/CustomerProfileHeader';
+import { CustomerQrPanel } from '../components/CustomerQrPanel';
 import { usePurchasesQuery } from '@/features/purchases/api/purchases.queries';
 import { PurchaseCard } from '@/features/purchases/components/PurchaseCard';
 import { useGiftsQuery, useGiftTypesQuery, useDeliverGiftMutation, useCancelGiftMutation } from '@/features/gifts/api/gifts.queries';
@@ -226,16 +226,19 @@ export function CustomerDetailsPage() {
       </SectionCard>
 
       <SectionCard title="رمز QR للعميل" icon={Gift}>
-        <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-start">
-          <div className="rounded-2xl border border-line bg-white p-4">
-            <QRCode value={encodeCustomerQr(customer.id)} size={160} />
-          </div>
-          <div className="text-center sm:text-right">
+        <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="text-center sm:max-w-xs sm:text-right">
             <p className="text-sm font-bold text-ink">امسح الرمز لتحديد العميل بسرعة</p>
-            <p className="mt-2 break-all font-mono text-xs text-muted">
-              {encodeCustomerQr(customer.id)}
+            <p className="mt-2 text-xs text-muted">
+              يمكنك مشاركة الصورة عبر واتساب أو تحميلها من الأزرار أدناه
             </p>
           </div>
+          <CustomerQrPanel
+            customerId={customer.id}
+            customerName={customer.name}
+            phone={customer.phone}
+            size={160}
+          />
         </div>
       </SectionCard>
 

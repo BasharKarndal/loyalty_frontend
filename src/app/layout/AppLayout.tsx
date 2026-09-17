@@ -217,6 +217,15 @@ export function AppLayout() {
                     >
                       <Icon icon={Settings} size="sm" />
                     </button>
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      disabled={isLoggingOut}
+                      className="rounded-lg border border-line p-2 text-muted transition-colors hover:border-umber/40 hover:text-umber disabled:opacity-50"
+                      aria-label="تسجيل الخروج"
+                    >
+                      <Icon icon={LogOut} size="sm" />
+                    </button>
                   </>
                 )}
                 <ThemeToggle />

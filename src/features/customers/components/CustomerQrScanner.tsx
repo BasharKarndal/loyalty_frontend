@@ -8,16 +8,22 @@ interface CustomerQrScannerProps {
   className?: string;
 }
 
-async function buildCameraConstraints(): Promise<MediaStreamConstraints> {
-  return {
-    audio: false,
-    video: { facingMode: { ideal: 'environment' } },
-  };
+async function pickBackCameraId(): Promise<string | undefined> {
+  if (!navigator.mediaDevices?.enumerateDevices) return undefined;
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  const cameras = devices.filter((device) => device.kind === 'videoinput');
+  if (cameras.length === 0) return undefined;
+
+  const back = cameras.find((device) =>
+    /back|rear|environment|خلفية|خلف/i.test(device.label)
+  );
+  return (back ?? cameras[cameras.length - 1])?.deviceId;
 }
 
 export function CustomerQrScanner({ active, onScan, className }: CustomerQrScannerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const controlsRef = useRef<IScannerControls | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const onScanRef = useRef(onScan);
   const scanLockRef = useRef(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -43,11 +49,10 @@ export function CustomerQrScanner({ active, onScan, className }: CustomerQrScann
       }
       controlsRef.current = null;
 
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+
       const video = videoRef.current;
-      const stream = video?.srcObject;
-      if (stream instanceof MediaStream) {
-        stream.getTracks().forEach((track) => track.stop());
-      }
       if (video) {
         video.srcObject = null;
       }
@@ -69,23 +74,55 @@ export function CustomerQrScanner({ active, onScan, className }: CustomerQrScann
       const video = videoRef.current;
       if (!video || cancelled) return;
 
+      if (!window.isSecureContext && location.hostname !== 'localhost') {
+        setCameraError('مسح QR يحتاج اتصال HTTPS على الجوال.');
+        setStarting(false);
+        return;
+      }
+
       try {
         const reader = new BrowserQRCodeReader(undefined, {
-          delayBetweenScanAttempts: 180,
-          delayBetweenScanSuccess: 1200,
+          delayBetweenScanAttempts: 200,
+          delayBetweenScanSuccess: 1400,
         });
 
-        const constraints = await buildCameraConstraints();
+        let stream: MediaStream | null = null;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: false,
+            video: {
+              facingMode: { ideal: 'environment' },
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+            },
+          });
+        } catch {
+          const deviceId = await pickBackCameraId();
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: false,
+            video: deviceId
+              ? { deviceId: { exact: deviceId } }
+              : { facingMode: 'environment' },
+          });
+        }
 
-        const controls = await reader.decodeFromConstraints(
-          constraints,
-          video,
-          (result) => {
-            if (!result || cancelled || scanLockRef.current) return;
-            scanLockRef.current = true;
-            onScanRef.current(result.getText());
-          }
-        );
+        if (cancelled) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+
+        streamRef.current = stream;
+        video.setAttribute('playsinline', 'true');
+        video.setAttribute('webkit-playsinline', 'true');
+        video.muted = true;
+        video.srcObject = stream;
+        await video.play().catch(() => undefined);
+
+        const controls = await reader.decodeFromStream(stream, video, (result) => {
+          if (!result || cancelled || scanLockRef.current) return;
+          scanLockRef.current = true;
+          onScanRef.current(result.getText());
+        });
 
         if (cancelled) {
           controls.stop();
@@ -93,11 +130,10 @@ export function CustomerQrScanner({ active, onScan, className }: CustomerQrScann
         }
 
         controlsRef.current = controls;
-        await video.play().catch(() => undefined);
       } catch {
         if (!cancelled) {
           setCameraError(
-            'تعذر تشغيل الكاميرا. تأكد من منح الإذن واستخدم HTTPS أو localhost على الجوال.'
+            'تعذر تشغيل الكاميرا. امنح إذن الكاميرا من إعدادات المتصفح ثم أعد المحاولة.'
           );
         }
       } finally {
@@ -130,7 +166,7 @@ export function CustomerQrScanner({ active, onScan, className }: CustomerQrScann
       />
 
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-        <div className="h-64 w-64 rounded-3xl border-2 border-wheat/90 shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]" />
+        <div className="h-56 w-56 rounded-3xl border-2 border-wheat/90 shadow-[0_0_0_9999px_rgba(0,0,0,0.45)] sm:h-64 sm:w-64" />
       </div>
 
       {starting && !cameraError && (

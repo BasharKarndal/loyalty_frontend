@@ -1,17 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import QRCode from 'react-qr-code';
-import { Check, Download, MessageCircle, Share2, X } from 'lucide-react';
+import { Check, MessageCircle, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button, Icon } from '@shared/components';
-import { encodeCustomerQr } from '@shared/lib/format';
-import { buildQrFollowUpMessage, buildWhatsAppWelcomeMessage } from '@shared/lib/whatsappMessages';
-import {
-  downloadBlob,
-  generateQrPngBlob,
-  isMobileDevice,
-  openWhatsApp,
-  shareQrImage,
-} from '@shared/lib/whatsapp';
+import { buildWhatsAppWelcomeMessage } from '@shared/lib/whatsappMessages';
+import { isMobileDevice, openWhatsApp } from '@shared/lib/whatsapp';
+import { CustomerQrPanel } from './CustomerQrPanel';
 
 interface CustomerWelcomeSheetProps {
   open: boolean;
@@ -30,16 +23,10 @@ export function CustomerWelcomeSheet({
   cafeName,
   onComplete,
 }: CustomerWelcomeSheetProps) {
-  const qrRef = useRef<HTMLDivElement>(null);
   const [welcomeSent, setWelcomeSent] = useState(false);
-  const [sharing, setSharing] = useState(false);
-  const [downloading, setDownloading] = useState(false);
   const openedRef = useRef(false);
 
-  const qrPayload = encodeCustomerQr(customerId);
   const welcomeMessage = buildWhatsAppWelcomeMessage(customerName, cafeName, 0);
-  const followUpMessage = buildQrFollowUpMessage(customerName);
-  const safeFileName = `qr_${customerName.replace(/[^\w\u0600-\u06FF]+/g, '_') || 'customer'}.png`;
 
   useEffect(() => {
     if (!open) {
@@ -50,62 +37,29 @@ export function CustomerWelcomeSheet({
     if (openedRef.current) return;
     openedRef.current = true;
 
-    const sent = openWhatsApp(phone, welcomeMessage);
-    setWelcomeSent(sent);
-    if (sent) {
-      toast.success('تم فتح واتساب — أرسل رسالة الترحيب ثم اضغط «إرسال QR على واتساب»');
-    } else {
-      toast.error('تعذر فتح واتساب — تحقق من رقم الهاتف');
+    // Desktop: open WhatsApp in a new tab. Mobile browsers often block
+    // popup-without-gesture — never navigate away or the QR sheet unloads.
+    if (!isMobileDevice()) {
+      const sent = openWhatsApp(phone, welcomeMessage);
+      setWelcomeSent(sent);
+      if (sent) {
+        toast.success('تم فتح واتساب — أرسل رسالة الترحيب ثم شارك رمز QR');
+      } else {
+        toast.error('تعذر فتح واتساب — تحقق من رقم الهاتف');
+      }
+      return;
     }
+
+    toast.message('اضغط «إرسال الترحيب» لفتح واتساب، ثم شارك رمز QR من الأزرار أدناه', {
+      duration: 5000,
+    });
   }, [open, phone, welcomeMessage]);
 
   if (!open) return null;
 
-  const handleDownloadQr = async () => {
-    setDownloading(true);
-    try {
-      const blob = await generateQrPngBlob(qrPayload);
-      downloadBlob(blob, safeFileName);
-      toast.success('تم تحميل رمز QR');
-    } catch {
-      toast.error('تعذر تحميل رمز QR');
-    } finally {
-      setDownloading(false);
-    }
-  };
-
-  const handleSendQrToWhatsApp = async () => {
-    setSharing(true);
-    try {
-      const blob = await generateQrPngBlob(qrPayload);
-      const result = await shareQrImage(blob, followUpMessage);
-
-      if (result === 'shared') {
-        toast.success('اختر «واتساب» من قائمة المشاركة لإرسال الصورة مع النص');
-        return;
-      }
-
-      if (result === 'clipboard') {
-        openWhatsApp(
-          phone,
-          `${followUpMessage}\n\n📎 تم نسخ صورة QR — الصقها في المحادثة (${isMobileDevice() ? 'لمسة مطوّلة → لصق' : 'Ctrl+V'}).`
-        );
-        toast.success('تم نسخ صورة QR في الحافظة — الصقها في واتساب');
-        return;
-      }
-
-      openWhatsApp(phone, followUpMessage);
-      toast.message('تم تحميل صورة QR — أرفقها من الملفات في واتساب', { duration: 7000 });
-    } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') return;
-      toast.error('تعذر إرسال QR — جرّب «تحميل QR» ثم أرفقها يدوياً');
-    } finally {
-      setSharing(false);
-    }
-  };
-
   const handleResendWelcome = () => {
     const sent = openWhatsApp(phone, welcomeMessage);
+    setWelcomeSent(sent);
     if (sent) toast.success('تم فتح واتساب');
     else toast.error('تعذر فتح واتساب');
   };
@@ -118,8 +72,8 @@ export function CustomerWelcomeSheet({
         aria-label="إغلاق"
         onClick={onComplete}
       />
-      <div className="relative z-10 w-full max-w-md overflow-hidden rounded-t-3xl border border-line bg-panel shadow-2xl sm:rounded-2xl">
-        <div className="border-b border-line bg-gradient-to-l from-wheat/10 to-transparent px-5 py-4">
+      <div className="relative z-10 max-h-[92dvh] w-full max-w-md overflow-y-auto overscroll-contain rounded-t-3xl border border-line bg-panel shadow-2xl sm:rounded-2xl">
+        <div className="sticky top-0 z-10 border-b border-line bg-gradient-to-l from-wheat/10 to-panel px-5 py-4">
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-xs font-bold text-wheat">تمت إضافة العميل بنجاح</p>
@@ -140,7 +94,7 @@ export function CustomerWelcomeSheet({
         <div className="space-y-4 px-5 py-4">
           <div className="flex items-center gap-3 rounded-xl border border-line bg-surface/50 p-3">
             <span
-              className={`flex h-8 w-8 items-center justify-center rounded-full ${
+              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
                 welcomeSent ? 'bg-umber/15 text-umber' : 'bg-wheat/15 text-wheat'
               }`}
             >
@@ -149,11 +103,15 @@ export function CustomerWelcomeSheet({
             <div className="min-w-0 flex-1">
               <p className="text-sm font-extrabold text-ink">1. رسالة الترحيب</p>
               <p className="text-xs text-muted">
-                {welcomeSent ? 'تم فتح واتساب — أرسل الرسالة للعميل' : 'لم يُفتح واتساب'}
+                {welcomeSent
+                  ? 'تم فتح واتساب — أرسل الرسالة للعميل'
+                  : isMobileDevice()
+                    ? 'اضغط إرسال الترحيب لفتح واتساب'
+                    : 'لم يُفتح واتساب'}
               </p>
             </div>
             <Button type="button" size="sm" variant="outline" onClick={handleResendWelcome}>
-              إعادة
+              {isMobileDevice() && !welcomeSent ? 'إرسال الترحيب' : 'إعادة'}
             </Button>
           </div>
 
@@ -161,47 +119,19 @@ export function CustomerWelcomeSheet({
             <p className="mb-1 text-sm font-extrabold text-ink">2. رمز عضوية QR</p>
             <p className="mb-3 text-xs text-muted">
               {isMobileDevice()
-                ? 'اضغط الزر أدناه واختر واتساب من قائمة المشاركة'
-                : 'على الكمبيوتر: تُنسخ الصورة تلقائياً — الصقها في واتساب'}
+                ? 'اضغط مشاركة واختر واتساب من قائمة الجهاز'
+                : 'على الكمبيوتر: تُنسخ الصورة أو تُحمّل — الصقها/أرفقها في واتساب'}
             </p>
-            <div className="mx-auto flex w-fit flex-col items-center gap-3">
-              <div
-                ref={qrRef}
-                className="rounded-2xl border border-line bg-white p-4 shadow-sm"
-              >
-                <QRCode value={qrPayload} size={180} level="M" />
-              </div>
-              <p className="max-w-xs text-center text-xs leading-relaxed text-muted">
-                {followUpMessage}
-              </p>
-            </div>
-            <div className="mt-4 space-y-2">
-              <Button
-                type="button"
-                size="sm"
-                className="w-full bg-[#25D366] text-white hover:bg-[#20bd5a]"
-                onClick={handleSendQrToWhatsApp}
-                disabled={sharing}
-              >
-                <Icon icon={Share2} size="sm" />
-                {sharing ? 'جاري التحضير...' : 'إرسال QR على واتساب'}
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="w-full"
-                onClick={handleDownloadQr}
-                disabled={downloading}
-              >
-                <Icon icon={Download} size="sm" />
-                {downloading ? 'جاري التحميل...' : 'تحميل QR فقط'}
-              </Button>
-            </div>
+            <CustomerQrPanel
+              customerId={customerId}
+              customerName={customerName}
+              phone={phone}
+              size={180}
+            />
           </div>
         </div>
 
-        <div className="border-t border-line px-5 py-4">
+        <div className="sticky bottom-0 border-t border-line bg-panel px-5 py-4">
           <Button type="button" className="w-full" onClick={onComplete}>
             تم — الانتقال لصفحة العميل
           </Button>
