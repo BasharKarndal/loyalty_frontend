@@ -6,6 +6,7 @@ import { BrandLogo, Button, Icon, ThemeToggle } from '@shared/components';
 import { Home, LogOut, Gift, QrCode, Settings, ShoppingBag, Users, BarChart3, CalendarClock, UserCog } from 'lucide-react';
 import { isSuperAdmin, useAuth } from '@/features/auth';
 import { useLogoSrc, useSettingsQuery } from '@/features/settings';
+import { formatDate, formatNumber } from '@shared/lib/format';
 import { APP_NAME } from '@/config/env';
 import brandLogo from '@/assets/app-icon.png';
 import { WorkspaceSwitcher } from '@/features/admin/components/WorkspaceSwitcher';
@@ -75,6 +76,12 @@ export function AppLayout() {
   const displayName = user?.full_name || 'المستخدم';
   const displayEmail = user?.email || '';
   const initial = displayName.trim().charAt(0) || 'م';
+  const subscription = !superAdmin ? user?.subscription : null;
+  const subscriptionHint = subscription
+    ? subscription.is_active
+      ? `باقي ${formatNumber(subscription.days_remaining)} يوم · حتى ${formatDate(subscription.ends_at)}`
+      : `منتهٍ منذ ${formatDate(subscription.ends_at)}`
+    : null;
 
   return (
     <div className="flex h-[100dvh] overflow-hidden bg-surface font-sans" dir="rtl">
@@ -149,6 +156,20 @@ export function AppLayout() {
                 <div className="truncate text-[11px] text-white/60">
                   {superAdmin ? 'مشرف عام' : displayEmail}
                 </div>
+                {subscriptionHint && (
+                  <div
+                    className={cn(
+                      'mt-1 truncate text-[10px] font-bold',
+                      subscription?.is_active
+                        ? subscription.days_remaining <= 7
+                          ? 'text-amber-200'
+                          : 'text-wheat'
+                        : 'text-red-300'
+                    )}
+                  >
+                    {subscriptionHint}
+                  </div>
+                )}
               </div>
             </div>
             <Button

@@ -24,6 +24,7 @@ import { useDashboardStatsQuery } from '../api/dashboard.queries';
 import { useTodayPurchasesSummaryQuery } from '@/features/purchases/api/purchases.queries';
 import { DashboardStatTile } from '../components/DashboardStatTile';
 import { ScanFab } from '../components/ScanFab';
+import { SubscriptionExpiryCard } from '../components/SubscriptionExpiryCard';
 import brandLogo from '@/assets/app-icon.png';
 
 function SectionHeader({
@@ -146,6 +147,10 @@ function CafeHomePage() {
           </div>
         </div>
       </section>
+
+      {!superAdmin && user?.subscription && (
+        <SubscriptionExpiryCard subscription={user.subscription} />
+      )}
 
       <p className="text-xs text-muted">
         مبيعات اليوم = مجموع مبالغ المشتريات — باقي الإحصائيات إجمالية
