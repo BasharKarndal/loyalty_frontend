@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { getApiErrorCodes, getApiErrorMessage } from '@shared/lib/apiError';
 import { indexedDb, QUERY_PERSIST_KEY } from '@shared/lib/indexedDb';
+import { wakeBackend } from '@shared/lib/serverWake';
 import { authApi } from './auth.api';
 import { authStorage } from '../lib/authStorage';
 import type { LoginRequest } from '../types/auth.types';
@@ -31,9 +32,10 @@ function authErrorMessage(error: unknown, fallback: string): string {
 
 /** Network / cold-start failures — worth retrying. Auth failures are not. */
 function shouldRetryAuthMe(failureCount: number, error: unknown): boolean {
-  if (failureCount >= 2) return false;
+  // Railway cold starts often need ~30–60s; allow several attempts.
+  if (failureCount >= 6) return false;
 
-  if (!isAxiosError(error)) return failureCount < 1;
+  if (!isAxiosError(error)) return failureCount < 2;
 
   const status = error.response?.status;
   if (status === 401 || status === 403 || status === 404) return false;
@@ -72,13 +74,17 @@ export const useLoginMutation = () => {
 export const useCurrentUserQuery = (enabled = true) => {
   return useQuery({
     queryKey: authKeys.me(),
-    queryFn: authApi.me,
+    queryFn: async () => {
+      // Warm sleeping hosts before the real auth call.
+      await wakeBackend(8_000);
+      return authApi.me();
+    },
     enabled: enabled && authStorage.isAuthenticated(),
     retry: shouldRetryAuthMe,
-    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 5000),
+    retryDelay: (attempt) => Math.min(1500 * 2 ** attempt, 10_000),
     staleTime: 60_000,
     gcTime: 30 * 60_000,
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true,
     refetchOnMount: true,
     refetchOnReconnect: true,
   });
