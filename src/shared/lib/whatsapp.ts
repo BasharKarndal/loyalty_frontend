@@ -61,19 +61,50 @@ export async function generateQrDataUrl(payload: string, size = 240): Promise<st
 export function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
 
-  // iOS Safari often ignores the download attribute — open the image so the user can save it.
   if (isMobileDevice()) {
-    const opened = window.open(url, '_blank', 'noopener,noreferrer');
-    if (!opened) {
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.target = '_blank';
-      anchor.rel = 'noopener noreferrer';
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-    }
-    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    // Popup may be blocked — show an in-page preview the user can long-press to save.
+    const overlay = document.createElement('div');
+    overlay.setAttribute(
+      'style',
+      'position:fixed;inset:0;z-index:99999;background:rgba(15,23,42,0.92);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;gap:12px;'
+    );
+
+    const img = document.createElement('img');
+    img.src = url;
+    img.alt = filename;
+    img.setAttribute(
+      'style',
+      'max-width:100%;max-height:70vh;border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,0.35);background:#fff;'
+    );
+
+    const hint = document.createElement('p');
+    hint.textContent = 'اضغط مطولاً على الصورة ثم اختر حفظ الصورة';
+    hint.setAttribute(
+      'style',
+      'color:#fff;font-family:Cairo,Tahoma,sans-serif;font-size:14px;font-weight:700;text-align:center;margin:0;'
+    );
+
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.textContent = 'إغلاق';
+    close.setAttribute(
+      'style',
+      'margin-top:4px;border:0;border-radius:12px;background:#cfa34e;color:#fff;font-family:Cairo,Tahoma,sans-serif;font-weight:800;padding:10px 22px;cursor:pointer;'
+    );
+
+    const cleanup = () => {
+      overlay.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+    };
+    close.onclick = cleanup;
+    overlay.onclick = (event) => {
+      if (event.target === overlay) cleanup();
+    };
+
+    overlay.appendChild(img);
+    overlay.appendChild(hint);
+    overlay.appendChild(close);
+    document.body.appendChild(overlay);
     return;
   }
 
