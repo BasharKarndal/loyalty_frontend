@@ -54,12 +54,7 @@ function EmptyHint({ message }: { message: string }) {
 export function HomePage() {
   const { user } = useAuth();
   if (isSuperAdmin(user)) {
-    return (
-      <div className="space-y-8">
-        <PlatformHomePage />
-        <CafeHomePage />
-      </div>
-    );
+    return <PlatformHomePage />;
   }
   return <CafeHomePage />;
 }

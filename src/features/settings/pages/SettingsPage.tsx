@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Save } from 'lucide-react';
-import { Button, Icon, RouteFallback } from '@shared/components';
+import { AlertCircle, Save } from 'lucide-react';
+import { Button, EmptyState, Icon, RouteFallback } from '@shared/components';
 import {
   LoyaltyPreview,
   LogoUploader,
@@ -9,7 +9,7 @@ import {
 import { useSettingsQuery, useUpdateSettingsMutation } from '../api/settings.queries';
 
 export function SettingsPage() {
-  const { data: settings, isLoading } = useSettingsQuery();
+  const { data: settings, isLoading, isError, refetch } = useSettingsQuery();
   const updateSettings = useUpdateSettingsMutation();
 
   const [hydrated, setHydrated] = useState(false);
@@ -30,8 +30,19 @@ export function SettingsPage() {
     setHydrated(true);
   }, [settings, hydrated]);
 
-  if (isLoading || !settings) {
-    return <RouteFallback label="جاري تحميل الإعدادات..." />;
+  if (isLoading) {
+    return <RouteFallback />;
+  }
+
+  if (isError || !settings) {
+    return (
+      <EmptyState
+        message="تعذر تحميل الإعدادات"
+        icon={AlertCircle}
+        actionLabel="إعادة المحاولة"
+        onAction={() => refetch()}
+      />
+    );
   }
 
   const parsedVisit = Math.max(1, Number(visitTarget) || 10);
