@@ -30,6 +30,14 @@ export interface DashboardStats {
   recentGifts: GiftRedemption[];
 }
 
+async function settled<T>(promise: Promise<T>): Promise<T | null> {
+  try {
+    return await promise;
+  } catch {
+    return null;
+  }
+}
+
 async function fetchDashboardStats(
   config: Pick<LoyaltyConfig, 'visitRewardTarget' | 'pointsRewardTarget'>
 ): Promise<DashboardStats> {
@@ -43,30 +51,35 @@ async function fetchDashboardStats(
     pendingGiftsRes,
     recentGiftsRes,
   ] = await Promise.all([
-    customersApi.list({ skip: 0, limit: 1, active_only: true }),
-    customersApi.list({ skip: 0, limit: ELIGIBLE_SAMPLE_LIMIT, active_only: true }),
-    customersApi.list({ skip: 0, limit: RECENT_CUSTOMERS_LIMIT, active_only: true }),
-    purchasesApi.list({ skip: 0, limit: 1 }),
-    purchasesApi.list({ skip: 0, limit: RECENT_OPERATIONS_LIMIT }),
-    giftsApi.list({ skip: 0, limit: 1, exclude_cancelled: true }),
-    giftsApi.list({ skip: 0, limit: 1, status: 'pending' }),
-    giftsApi.list({ skip: 0, limit: RECENT_OPERATIONS_LIMIT, exclude_cancelled: true }),
+    settled(customersApi.list({ skip: 0, limit: 1, active_only: true })),
+    settled(customersApi.list({ skip: 0, limit: ELIGIBLE_SAMPLE_LIMIT, active_only: true })),
+    settled(customersApi.list({ skip: 0, limit: RECENT_CUSTOMERS_LIMIT, active_only: true })),
+    settled(purchasesApi.list({ skip: 0, limit: 1 })),
+    settled(purchasesApi.list({ skip: 0, limit: RECENT_OPERATIONS_LIMIT })),
+    settled(giftsApi.list({ skip: 0, limit: 1, exclude_cancelled: true })),
+    settled(giftsApi.list({ skip: 0, limit: 1, status: 'pending' })),
+    settled(giftsApi.list({ skip: 0, limit: RECENT_OPERATIONS_LIMIT, exclude_cancelled: true })),
   ]);
 
-  const eligibleCustomersCount = eligibleSampleRes.items.filter((c) =>
+  // Need at least the core customer/purchase endpoints; otherwise surface a real error.
+  if (!customersCountRes && !purchasesTotalRes && !giftsTotalRes) {
+    throw new Error('تعذر الاتصال بواجهة البيانات — تحقق من الخادم ثم أعد المحاولة');
+  }
+
+  const eligibleCustomersCount = (eligibleSampleRes?.items ?? []).filter((c) =>
     isEligibleForAny(c.visit_count, c.points, config)
   ).length;
 
   return {
-    totalSales: Number(purchasesTotalRes.total_amount || 0),
-    customersCount: customersCountRes.total,
-    purchasesCount: purchasesTotalRes.total,
-    giftsCount: giftsTotalRes.total,
-    pendingGiftsCount: pendingGiftsRes.pending_count,
+    totalSales: Number(purchasesTotalRes?.total_amount || 0),
+    customersCount: customersCountRes?.total ?? 0,
+    purchasesCount: purchasesTotalRes?.total ?? 0,
+    giftsCount: giftsTotalRes?.total ?? 0,
+    pendingGiftsCount: pendingGiftsRes?.pending_count ?? 0,
     eligibleCustomersCount,
-    recentCustomers: recentCustomersRes.items,
-    recentPurchases: recentPurchasesRes.items,
-    recentGifts: recentGiftsRes.items,
+    recentCustomers: recentCustomersRes?.items ?? [],
+    recentPurchases: recentPurchasesRes?.items ?? [],
+    recentGifts: recentGiftsRes?.items ?? [],
   };
 }
 
@@ -77,4 +90,6 @@ export const useDashboardStatsQuery = (
     queryKey: dashboardKeys.stats(config),
     queryFn: () => fetchDashboardStats(config),
     staleTime: 30_000,
+    retry: 2,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
   });

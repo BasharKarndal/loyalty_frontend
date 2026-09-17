@@ -8,6 +8,7 @@ import {
   ShoppingBag,
   Users,
 } from 'lucide-react';
+import { useIsRestoring } from '@tanstack/react-query';
 import { APP_NAME } from '@/config/env';
 import { useAuth, isSuperAdmin } from '@/features/auth';
 import { PlatformHomePage } from '@/features/admin';
@@ -17,6 +18,7 @@ import {
   Icon,
   RouteFallback,
 } from '@shared/components';
+import { getApiErrorMessage } from '@shared/lib/apiError';
 import { customerInitial, formatCurrency, formatDateTime, formatNumber } from '@shared/lib/format';
 import { useDashboardStatsQuery } from '../api/dashboard.queries';
 import { useTodayPurchasesSummaryQuery } from '@/features/purchases/api/purchases.queries';
@@ -63,10 +65,18 @@ function CafeHomePage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const superAdmin = isSuperAdmin(user);
+  const isRestoring = useIsRestoring();
   const { data: settings } = useSettingsQuery();
   const logoSrc = useLogoSrc();
   const { config } = useLoyaltyConfig();
-  const { data: stats, isLoading, isError, refetch, isFetching } = useDashboardStatsQuery(config);
+  const {
+    data: stats,
+    isLoading,
+    isError,
+    error,
+    refetch,
+    isFetching,
+  } = useDashboardStatsQuery(config);
   const { data: todayPurchases } = useTodayPurchasesSummaryQuery();
 
   const cafeName = superAdmin
@@ -74,17 +84,23 @@ function CafeHomePage() {
     : settings?.cafe_name?.trim() || APP_NAME;
   const currency = config.currency;
 
-  if (isLoading) return <RouteFallback compact />;
+  if (isRestoring || isLoading || (isFetching && !stats)) {
+    return <RouteFallback compact />;
+  }
 
-  if (isError || !stats) {
+  if (isError && !stats) {
     return (
       <EmptyState
-        message="تعذر تحميل لوحة التحكم"
+        message={getApiErrorMessage(error, 'تعذر تحميل لوحة التحكم')}
         icon={AlertCircle}
         actionLabel="إعادة المحاولة"
         onAction={() => refetch()}
       />
     );
+  }
+
+  if (!stats) {
+    return <RouteFallback compact />;
   }
 
   const activities = [
