@@ -10,7 +10,9 @@ export const STORAGE_KEYS = {
   theme: 'gm-theme',
   workspace: 'gm-workspace-owner-id',
   queryCache: 'loyalty-react-query',
+  lastActivity: 'last_activity_at',
 } as const;
+
 
 /** Legacy localStorage keys — migrated once into IndexedDB then removed. */
 const LEGACY_LOCAL_KEYS = [

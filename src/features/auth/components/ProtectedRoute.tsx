@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { AlertCircle } from 'lucide-react';
 import { isAxiosError } from 'axios';
@@ -6,20 +6,18 @@ import { useIsRestoring, useQueryClient } from '@tanstack/react-query';
 import { EmptyState, RouteFallback } from '@shared/components';
 import { getApiErrorCodes } from '@shared/lib/apiError';
 import { indexedDb, QUERY_PERSIST_KEY } from '@shared/lib/indexedDb';
-import {
-  isNetworkOrColdStartError,
-  wakeBackend,
-} from '@shared/lib/serverWake';
+import { isNetworkOrColdStartError, wakeBackend } from '@shared/lib/serverWake';
 import { authStorage } from '@features/auth/lib/authStorage';
+import {
+  clearIdleSessionLocally,
+  isSessionIdle,
+} from '@features/auth/lib/sessionIdle';
 import { authApi } from '../api/auth.api';
 import { authErrorMessage, authKeys, useCurrentUserQuery } from '../api/auth.queries';
 
 const RESTORE_GRACE_MS = 3500;
-const AUTH_LOADING_CAP_MS = 20000;
-/** Keep auto-waking / retrying before showing a hard error after idle. */
-const COLD_START_GRACE_MS = 90_000;
-const COLD_START_RETRY_MS = 3_500;
-const RESUME_IDLE_MS = 90_000;
+/** Never stay on the spinner longer than this. */
+const AUTH_LOADING_CAP_MS = 15_000;
 
 function describeMeFailure(error: unknown): string {
   const codes = getApiErrorCodes(error);
@@ -31,7 +29,7 @@ function describeMeFailure(error: unknown): string {
   }
 
   if (isNetworkOrColdStartError(error) || (isAxiosError(error) && !error.response)) {
-    return 'تعذر الاتصال بالخادم. قد يكون الخادم يبدأ الآن بعد فترة خمول — انتظر قليلاً ثم أعد المحاولة.';
+    return 'تعذر الاتصال بالخادم بعد فترة خمول. أعد المحاولة أو سجّل الدخول من جديد.';
   }
 
   return authErrorMessage(
@@ -43,14 +41,23 @@ function describeMeFailure(error: unknown): string {
 export const ProtectedRoute = () => {
   const location = useLocation();
   const queryClient = useQueryClient();
-  const isAuthenticated = authStorage.isAuthenticated();
+
+  // Expire overnight sessions before /auth/me (prevents infinite loading).
+  const [idleExpired] = useState(() => {
+    if (!isSessionIdle()) return false;
+    clearIdleSessionLocally();
+    return true;
+  });
+
+  useEffect(() => {
+    if (idleExpired) queryClient.clear();
+  }, [idleExpired, queryClient]);
+
+  const isAuthenticated = !idleExpired && authStorage.isAuthenticated();
   const isRestoring = useIsRestoring();
   const [restoreTimedOut, setRestoreTimedOut] = useState(false);
   const [authTimedOut, setAuthTimedOut] = useState(false);
-  const [coldStartExhausted, setColdStartExhausted] = useState(false);
-  const wakingRef = useRef(false);
-  const lastOkAtRef = useRef(Date.now());
-  const networkErrorRef = useRef(false);
+  const [reconnecting, setReconnecting] = useState(false);
 
   const {
     isLoading,
@@ -60,16 +67,12 @@ export const ProtectedRoute = () => {
     error,
   } = useCurrentUserQuery(isAuthenticated);
 
-  const networkError = Boolean(isError && isNetworkOrColdStartError(error));
-  networkErrorRef.current = networkError;
-
-  const wakeAndRefetch = useCallback(
-    async (opts?: { purgePersist?: boolean }) => {
-      if (wakingRef.current) return;
-      wakingRef.current = true;
+  const retryAuth = useCallback(
+    async (purgePersist = false) => {
+      setAuthTimedOut(false);
+      setReconnecting(true);
       try {
-        if (opts?.purgePersist) {
-          // Soft recovery: drop stuck React Query disk cache, keep the login token.
+        if (purgePersist) {
           try {
             await indexedDb.del(QUERY_PERSIST_KEY);
           } catch {
@@ -77,24 +80,25 @@ export const ProtectedRoute = () => {
           }
           queryClient.removeQueries({ queryKey: authKeys.me(), exact: true });
         }
-
-        await wakeBackend(20_000);
+        await wakeBackend(12_000);
         await queryClient.fetchQuery({
           queryKey: authKeys.me(),
           queryFn: () => authApi.me(),
         });
       } catch {
-        // fetchQuery throws on failure — useQuery will surface the error.
+        // surfaced via useQuery error state
       } finally {
-        wakingRef.current = false;
+        setReconnecting(false);
       }
     },
     [queryClient]
   );
 
-  useEffect(() => {
-    if (user) lastOkAtRef.current = Date.now();
-  }, [user]);
+  const logoutToLogin = useCallback(() => {
+    clearIdleSessionLocally();
+    queryClient.clear();
+    window.location.replace('/login?reason=idle');
+  }, [queryClient]);
 
   useEffect(() => {
     if (!isRestoring) {
@@ -105,6 +109,7 @@ export const ProtectedRoute = () => {
     return () => window.clearTimeout(timer);
   }, [isRestoring]);
 
+  // Hard cap: do not reset when isFetching flickers during retries.
   useEffect(() => {
     if (!isAuthenticated || user || isError) {
       setAuthTimedOut(false);
@@ -112,58 +117,18 @@ export const ProtectedRoute = () => {
     }
     const timer = window.setTimeout(() => setAuthTimedOut(true), AUTH_LOADING_CAP_MS);
     return () => window.clearTimeout(timer);
-  }, [isAuthenticated, user, isError, isLoading, isFetching]);
+  }, [isAuthenticated, user, isError]);
 
-  // Soft grace window for Railway cold starts before showing a hard error.
-  useEffect(() => {
-    if (!networkError) {
-      setColdStartExhausted(false);
-      return;
-    }
-    setColdStartExhausted(false);
-    const timer = window.setTimeout(() => setColdStartExhausted(true), COLD_START_GRACE_MS);
-    return () => window.clearTimeout(timer);
-  }, [networkError]);
-
-  // While Railway may be waking, retry automatically.
-  useEffect(() => {
-    if (!isAuthenticated || !networkError || user) return;
-
-    void wakeAndRefetch();
-    const timer = window.setInterval(() => {
-      void wakeAndRefetch();
-    }, COLD_START_RETRY_MS);
-
-    return () => window.clearInterval(timer);
-  }, [isAuthenticated, networkError, user, wakeAndRefetch]);
-
-  // When the user returns after a long idle, wake the server immediately.
-  useEffect(() => {
-    if (!isAuthenticated) return;
-
-    const resume = () => {
-      if (document.visibilityState === 'hidden') return;
-      const idleFor = Date.now() - lastOkAtRef.current;
-      if (!networkErrorRef.current && idleFor < RESUME_IDLE_MS) return;
-      void wakeAndRefetch();
-    };
-
-    document.addEventListener('visibilitychange', resume);
-    window.addEventListener('online', resume);
-    window.addEventListener('focus', resume);
-
-    return () => {
-      document.removeEventListener('visibilitychange', resume);
-      window.removeEventListener('online', resume);
-      window.removeEventListener('focus', resume);
-    };
-  }, [isAuthenticated, wakeAndRefetch]);
-
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace state={{ from: location }} />;
+  if (idleExpired || !isAuthenticated) {
+    return (
+      <Navigate
+        to={idleExpired ? '/login?reason=idle' : '/login'}
+        replace
+        state={{ from: location }}
+      />
+    );
   }
 
-  // Keep the app usable if we already have a cached user while a refetch fails.
   if (user) {
     return <Outlet />;
   }
@@ -172,29 +137,21 @@ export const ProtectedRoute = () => {
     return <RouteFallback />;
   }
 
-  // Soft wake UI instead of a hard error while the server cold-starts.
-  if (networkError && !coldStartExhausted) {
-    return (
-      <RouteFallback message="الخادم يستيقظ بعد فترة الخمول... جاري إعادة الاتصال تلقائياً" />
-    );
-  }
-
-  if (authTimedOut && !isError) {
+  if (authTimedOut) {
     return (
       <EmptyState
-        message="التحميل يستغرق وقتاً أطول من المعتاد. أعد المحاولة أو تحقق من الاتصال."
+        message="انتهت مهلة التحميل. يمكنك إعادة المحاولة أو تسجيل الدخول من جديد."
         icon={AlertCircle}
-        actionLabel={isFetching ? 'جاري المحاولة...' : 'إعادة المحاولة'}
-        onAction={() => {
-          setAuthTimedOut(false);
-          void wakeAndRefetch({ purgePersist: true });
-        }}
+        actionLabel={reconnecting || isFetching ? 'جاري المحاولة...' : 'إعادة المحاولة'}
+        onAction={() => void retryAuth(true)}
+        secondaryActionLabel="تسجيل الدخول"
+        onSecondaryAction={logoutToLogin}
       />
     );
   }
 
-  if (isLoading || (isFetching && !isError)) {
-    return <RouteFallback />;
+  if (isLoading || isFetching || reconnecting) {
+    return <RouteFallback message="جاري التحقق من الجلسة..." />;
   }
 
   if (isError) {
@@ -202,11 +159,10 @@ export const ProtectedRoute = () => {
       <EmptyState
         message={describeMeFailure(error)}
         icon={AlertCircle}
-        actionLabel={isFetching ? 'جاري إعادة المحاولة...' : 'إعادة المحاولة'}
-        onAction={() => {
-          setColdStartExhausted(false);
-          void wakeAndRefetch({ purgePersist: true });
-        }}
+        actionLabel={reconnecting || isFetching ? 'جاري إعادة المحاولة...' : 'إعادة المحاولة'}
+        onAction={() => void retryAuth(true)}
+        secondaryActionLabel="تسجيل الدخول"
+        onSecondaryAction={logoutToLogin}
       />
     );
   }

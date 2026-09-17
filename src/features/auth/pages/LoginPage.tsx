@@ -77,6 +77,11 @@ export const LoginPage = () => {
             هذا الحساب معطّل ولا يمكن استخدام النظام.
           </div>
         )}
+        {accessReason === 'idle' && (
+          <div className="rounded-xl border border-wheat/30 bg-wheat/10 px-3 py-3 text-sm font-bold text-ink">
+            تم تسجيل الخروج تلقائياً بسبب عدم استخدام الموقع لفترة طويلة. سجّل الدخول للمتابعة.
+          </div>
+        )}
 
         <div>
           <label className="mb-2 flex items-center gap-2 text-sm font-medium text-ink">

@@ -8,6 +8,8 @@ interface EmptyStateProps {
   icon?: LucideIcon;
   actionLabel?: string;
   onAction?: () => void;
+  secondaryActionLabel?: string;
+  onSecondaryAction?: () => void;
   className?: string;
 }
 
@@ -17,6 +19,8 @@ export function EmptyState({
   icon: Icon,
   actionLabel,
   onAction,
+  secondaryActionLabel,
+  onSecondaryAction,
   className,
 }: EmptyStateProps) {
   return (
@@ -33,11 +37,20 @@ export function EmptyState({
       )}
       <p className="text-base font-bold text-ink">{message}</p>
       {description && <p className="mt-2 max-w-sm text-sm text-muted">{description}</p>}
-      {actionLabel && onAction && (
-        <Button type="button" className="mt-5" onClick={onAction}>
-          {actionLabel}
-        </Button>
-      )}
+      {(actionLabel && onAction) || (secondaryActionLabel && onSecondaryAction) ? (
+        <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+          {actionLabel && onAction && (
+            <Button type="button" onClick={onAction}>
+              {actionLabel}
+            </Button>
+          )}
+          {secondaryActionLabel && onSecondaryAction && (
+            <Button type="button" variant="outline" onClick={onSecondaryAction}>
+              {secondaryActionLabel}
+            </Button>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }
