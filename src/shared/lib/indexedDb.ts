@@ -13,6 +13,7 @@ export const STORAGE_KEYS = {
   lastActivity: 'last_activity_at',
   rememberAccount: 'remember_account',
   rememberedUsername: 'remembered_username',
+  rememberedPassword: 'remembered_password',
 } as const;
 
 

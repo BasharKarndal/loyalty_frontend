@@ -4,10 +4,12 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Eye, EyeOff, LogIn, Lock, User } from 'lucide-react';
 import { BrandLogo, Button, Icon, Input } from '@shared/components';
+import { useMediaQuery } from '@shared/hooks/useMediaQuery';
 import { AuthShell } from '../components/AuthShell';
 import { loginSchema, type LoginSchema } from '../schemas/login.schema';
 import { useAuth } from '../hooks/useAuth';
 import {
+  getRememberedPassword,
   getRememberedUsername,
   isRememberAccountEnabled,
   setRememberAccount,
@@ -18,6 +20,7 @@ export const LoginPage = () => {
   const location = useLocation();
   const { isAuthenticated, login, isLoggingIn } = useAuth();
   const [searchParams] = useSearchParams();
+  const isMobile = useMediaQuery('(max-width: 1023px)');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberAccount, setRememberAccountChecked] = useState(() =>
     isRememberAccountEnabled()
@@ -26,6 +29,8 @@ export const LoginPage = () => {
   const from =
     (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ||
     '/';
+  // On mobile always land on home after login.
+  const postLoginPath = isMobile ? '/' : from;
 
   const {
     register,
@@ -35,19 +40,19 @@ export const LoginPage = () => {
     resolver: zodResolver(loginSchema),
     defaultValues: {
       username: getRememberedUsername(),
-      password: '',
+      password: getRememberedPassword(),
     },
   });
 
   if (isAuthenticated) {
-    return <Navigate to={from} replace />;
+    return <Navigate to={postLoginPath} replace />;
   }
 
   const onSubmit = (data: LoginSchema) => {
     login(data, {
       onSuccess: () => {
-        setRememberAccount(rememberAccount, data.username);
-        navigate(from, { replace: true });
+        setRememberAccount(rememberAccount, data.username, data.password);
+        navigate(postLoginPath, { replace: true });
       },
     });
   };
@@ -144,7 +149,7 @@ export const LoginPage = () => {
             className="h-4 w-4 rounded border-line accent-wheat"
           />
           <span className="text-sm font-medium text-ink">تذكر الحساب</span>
-          <span className="text-xs text-muted">(يحفظ اسم المستخدم ويبقي الجلسة أطول)</span>
+          <span className="text-xs text-muted">(يحفظ اسم المستخدم وكلمة المرور ويبقي الجلسة أطول)</span>
         </label>
 
         <Button type="submit" className="w-full" size="lg" disabled={isLoggingIn}>

@@ -3,12 +3,18 @@ import { QueryProvider } from './providers/QueryProvider';
 import { ThemeProvider } from '@/shared/providers/ThemeProvider';
 import { useServerKeepAlive } from '@/shared/hooks/useServerKeepAlive';
 import { useIdleSessionLogout } from '@/features/auth/hooks/useIdleSessionLogout';
+import { MobileLaunchHome } from './components/MobileLaunchHome';
 import { AppRoutes } from './routes';
 
 function AppSessionGuards() {
   useServerKeepAlive(true);
   useIdleSessionLogout(true);
-  return <AppRoutes />;
+  return (
+    <>
+      <MobileLaunchHome />
+      <AppRoutes />
+    </>
+  );
 }
 
 function App() {
