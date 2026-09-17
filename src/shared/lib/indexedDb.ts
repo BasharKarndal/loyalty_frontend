@@ -5,6 +5,21 @@ const DB_VERSION = 1;
 const STORE_NAME = 'keyval';
 const IDB_TIMEOUT_MS = 2500;
 
+export const STORAGE_KEYS = {
+  accessToken: 'access_token',
+  theme: 'gm-theme',
+  workspace: 'gm-workspace-owner-id',
+  queryCache: 'loyalty-react-query',
+} as const;
+
+/** Legacy localStorage keys — migrated once into IndexedDB then removed. */
+const LEGACY_LOCAL_KEYS = [
+  STORAGE_KEYS.accessToken,
+  STORAGE_KEYS.theme,
+  STORAGE_KEYS.workspace,
+  STORAGE_KEYS.queryCache,
+] as const;
+
 type LoyaltyDb = IDBPDatabase<{
   keyval: {
     key: string;
@@ -14,6 +29,9 @@ type LoyaltyDb = IDBPDatabase<{
 
 let dbPromise: Promise<LoyaltyDb> | null = null;
 let idbUnavailable = false;
+
+/** In-memory mirror for sync reads (axios / first paint). */
+const memory = new Map<string, string>();
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -57,77 +75,116 @@ function getDb(): Promise<LoyaltyDb> {
   return dbPromise;
 }
 
+async function idbGet(key: string): Promise<string | null> {
+  const cached = memory.get(key);
+  if (cached !== undefined) return cached;
+  try {
+    const db = await getDb();
+    const value = await withTimeout(db.get(STORE_NAME, key), IDB_TIMEOUT_MS, 'IndexedDB get');
+    if (value != null) memory.set(key, value);
+    return value ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function idbSet(key: string, value: string): Promise<void> {
+  memory.set(key, value);
+  try {
+    const db = await getDb();
+    await withTimeout(db.put(STORE_NAME, value, key), IDB_TIMEOUT_MS, 'IndexedDB set');
+  } catch {
+    // memory still holds the value for this session
+  }
+}
+
+async function idbDel(key: string): Promise<void> {
+  memory.delete(key);
+  try {
+    const db = await getDb();
+    await withTimeout(db.delete(STORE_NAME, key), IDB_TIMEOUT_MS, 'IndexedDB del');
+  } catch {
+    // ignore
+  }
+}
+
+async function idbClear(): Promise<void> {
+  memory.clear();
+  try {
+    const db = await getDb();
+    await withTimeout(db.clear(STORE_NAME), IDB_TIMEOUT_MS, 'IndexedDB clear');
+  } catch {
+    // ignore
+  }
+}
+
 export const indexedDb = {
-  async get(key: string): Promise<string | null> {
-    try {
-      const db = await getDb();
-      const value = await withTimeout(db.get(STORE_NAME, key), IDB_TIMEOUT_MS, 'IndexedDB get');
-      return value ?? null;
-    } catch {
-      return null;
-    }
+  getSync(key: string): string | null {
+    return memory.get(key) ?? null;
   },
 
-  async set(key: string, value: string): Promise<void> {
-    try {
-      const db = await getDb();
-      await withTimeout(db.put(STORE_NAME, value, key), IDB_TIMEOUT_MS, 'IndexedDB set');
-    } catch {
-      // ignore — cache is best-effort
-    }
+  get: idbGet,
+
+  set: idbSet,
+
+  setSync(key: string, value: string): void {
+    memory.set(key, value);
+    void idbSet(key, value);
   },
 
-  async del(key: string): Promise<void> {
-    try {
-      const db = await getDb();
-      await withTimeout(db.delete(STORE_NAME, key), IDB_TIMEOUT_MS, 'IndexedDB del');
-    } catch {
-      // ignore
-    }
+  del: idbDel,
+
+  delSync(key: string): void {
+    memory.delete(key);
+    void idbDel(key);
   },
 
-  async clear(): Promise<void> {
-    try {
-      const db = await getDb();
-      await withTimeout(db.clear(STORE_NAME), IDB_TIMEOUT_MS, 'IndexedDB clear');
-    } catch {
-      // ignore
-    }
-  },
+  clear: idbClear,
 };
+
+/** TanStack Query persist — IndexedDB only. */
+export const queryPersistStorage = {
+  getItem: (key: string) => idbGet(key),
+  setItem: (key: string, value: string) => idbSet(key, value),
+  removeItem: (key: string) => idbDel(key),
+};
+
+export const QUERY_PERSIST_KEY = STORAGE_KEYS.queryCache;
+
+function readLegacyLocal(key: string): string | null {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function removeLegacyLocal(key: string): void {
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    // ignore
+  }
+}
 
 /**
- * Async storage for TanStack Query persist.
- * Prefers IndexedDB, falls back to localStorage if IDB is slow/blocked (common on mobile).
+ * Load IndexedDB into memory before React mounts.
+ * One-time: migrates leftover localStorage values into IndexedDB, then deletes them.
  */
-export const queryPersistStorage = {
-  async getItem(key: string): Promise<string | null> {
-    const fromIdb = await indexedDb.get(key);
-    if (fromIdb != null) return fromIdb;
-    try {
-      return window.localStorage.getItem(key);
-    } catch {
-      return null;
-    }
-  },
+export async function hydrateClientStorage(): Promise<void> {
+  const keys = Object.values(STORAGE_KEYS);
 
-  async setItem(key: string, value: string): Promise<void> {
-    await indexedDb.set(key, value);
-    try {
-      window.localStorage.setItem(key, value);
-    } catch {
-      // quota / private mode
-    }
-  },
+  for (const key of keys) {
+    const fromIdb = await idbGet(key);
+    if (fromIdb != null) continue;
 
-  async removeItem(key: string): Promise<void> {
-    await indexedDb.del(key);
-    try {
-      window.localStorage.removeItem(key);
-    } catch {
-      // ignore
+    const legacy = readLegacyLocal(key);
+    if (legacy != null) {
+      await idbSet(key, legacy);
     }
-  },
-};
+  }
 
-export const QUERY_PERSIST_KEY = 'loyalty-react-query';
+  for (const key of LEGACY_LOCAL_KEYS) {
+    removeLegacyLocal(key);
+  }
+}

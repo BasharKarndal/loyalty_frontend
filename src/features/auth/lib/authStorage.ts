@@ -1,16 +1,16 @@
-const ACCESS_TOKEN_KEY = 'access_token';
+import { indexedDb, STORAGE_KEYS } from '@shared/lib/indexedDb';
 
 export const authStorage = {
   getToken(): string | null {
-    return localStorage.getItem(ACCESS_TOKEN_KEY);
+    return indexedDb.getSync(STORAGE_KEYS.accessToken);
   },
 
   setToken(token: string): void {
-    localStorage.setItem(ACCESS_TOKEN_KEY, token);
+    indexedDb.setSync(STORAGE_KEYS.accessToken, token);
   },
 
   clearToken(): void {
-    localStorage.removeItem(ACCESS_TOKEN_KEY);
+    indexedDb.delSync(STORAGE_KEYS.accessToken);
   },
 
   isAuthenticated(): boolean {

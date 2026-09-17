@@ -1,14 +1,15 @@
-const WORKSPACE_KEY = 'gm-workspace-owner-id';
+import { indexedDb, STORAGE_KEYS } from '@shared/lib/indexedDb';
+
 const WORKSPACE_EVENT = 'gm-workspace-changed';
 
 export const workspaceStorage = {
   get(): string | null {
-    return localStorage.getItem(WORKSPACE_KEY);
+    return indexedDb.getSync(STORAGE_KEYS.workspace);
   },
 
   set(id: string | null): void {
-    if (id) localStorage.setItem(WORKSPACE_KEY, id);
-    else localStorage.removeItem(WORKSPACE_KEY);
+    if (id) indexedDb.setSync(STORAGE_KEYS.workspace, id);
+    else indexedDb.delSync(STORAGE_KEYS.workspace);
     window.dispatchEvent(new Event(WORKSPACE_EVENT));
   },
 

@@ -48,11 +48,6 @@ async function clearPersistedQueryCache() {
   } catch {
     // IndexedDB may be unavailable in private mode — ignore
   }
-  try {
-    window.localStorage.removeItem(QUERY_PERSIST_KEY);
-  } catch {
-    // ignore
-  }
 }
 
 export const useLoginMutation = () => {

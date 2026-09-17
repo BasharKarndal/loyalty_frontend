@@ -1,6 +1,8 @@
+import { indexedDb, STORAGE_KEYS } from '@shared/lib/indexedDb';
+
 export type Theme = 'light' | 'dark';
 
-export const THEME_STORAGE_KEY = 'gm-theme';
+export const THEME_STORAGE_KEY = STORAGE_KEYS.theme;
 
 /** ولاء brand palette — matches cafe_loyalty_manager AppColors */
 export const palette = {
@@ -26,7 +28,7 @@ export const palette = {
 export function getPreferredTheme(): Theme {
   if (typeof window === 'undefined') return 'light';
 
-  const stored = localStorage.getItem(THEME_STORAGE_KEY);
+  const stored = indexedDb.getSync(THEME_STORAGE_KEY);
   if (stored === 'light' || stored === 'dark') return stored;
 
   return window.matchMedia('(prefers-color-scheme: dark)').matches
@@ -43,5 +45,5 @@ export function initTheme() {
 }
 
 export function persistTheme(theme: Theme) {
-  localStorage.setItem(THEME_STORAGE_KEY, theme);
+  indexedDb.setSync(THEME_STORAGE_KEY, theme);
 }
