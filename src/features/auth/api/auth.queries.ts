@@ -2,6 +2,7 @@ import { isAxiosError } from 'axios';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { getApiErrorCodes, getApiErrorMessage } from '@shared/lib/apiError';
+import { indexedDb, QUERY_PERSIST_KEY } from '@shared/lib/indexedDb';
 import { authApi } from './auth.api';
 import { authStorage } from '../lib/authStorage';
 import type { LoginRequest } from '../types/auth.types';
@@ -41,13 +42,24 @@ function shouldRetryAuthMe(failureCount: number, error: unknown): boolean {
   return true;
 }
 
+async function clearPersistedQueryCache() {
+  try {
+    await indexedDb.del(QUERY_PERSIST_KEY);
+  } catch {
+    // IndexedDB may be unavailable in private mode — ignore
+  }
+}
+
 export const useLoginMutation = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (data: LoginRequest) => authApi.login(data),
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       authStorage.setToken(data.access_token);
+      // Drop previous account cache before loading the new session.
+      queryClient.clear();
+      await clearPersistedQueryCache();
       queryClient.invalidateQueries({ queryKey: authKeys.me() });
       toast.success('تم تسجيل الدخول بنجاح');
     },
@@ -83,9 +95,10 @@ export const useLogoutMutation = () => {
         // ignore network errors on logout
       }
     },
-    onSettled: () => {
+    onSettled: async () => {
       authStorage.clearToken();
       queryClient.clear();
+      await clearPersistedQueryCache();
       toast.success('تم تسجيل الخروج');
     },
   });
