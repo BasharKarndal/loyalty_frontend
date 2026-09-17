@@ -2,15 +2,17 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { AlertCircle } from 'lucide-react';
 import { isAxiosError } from 'axios';
-import { useIsRestoring } from '@tanstack/react-query';
+import { useIsRestoring, useQueryClient } from '@tanstack/react-query';
 import { EmptyState, RouteFallback } from '@shared/components';
 import { getApiErrorCodes } from '@shared/lib/apiError';
+import { indexedDb, QUERY_PERSIST_KEY } from '@shared/lib/indexedDb';
 import {
   isNetworkOrColdStartError,
   wakeBackend,
 } from '@shared/lib/serverWake';
 import { authStorage } from '@features/auth/lib/authStorage';
-import { authErrorMessage, useCurrentUserQuery } from '../api/auth.queries';
+import { authApi } from '../api/auth.api';
+import { authErrorMessage, authKeys, useCurrentUserQuery } from '../api/auth.queries';
 
 const RESTORE_GRACE_MS = 3500;
 const AUTH_LOADING_CAP_MS = 20000;
@@ -40,6 +42,7 @@ function describeMeFailure(error: unknown): string {
 
 export const ProtectedRoute = () => {
   const location = useLocation();
+  const queryClient = useQueryClient();
   const isAuthenticated = authStorage.isAuthenticated();
   const isRestoring = useIsRestoring();
   const [restoreTimedOut, setRestoreTimedOut] = useState(false);
@@ -55,22 +58,39 @@ export const ProtectedRoute = () => {
     isFetching,
     data: user,
     error,
-    refetch,
   } = useCurrentUserQuery(isAuthenticated);
 
   const networkError = Boolean(isError && isNetworkOrColdStartError(error));
   networkErrorRef.current = networkError;
 
-  const wakeAndRefetch = useCallback(async () => {
-    if (wakingRef.current) return;
-    wakingRef.current = true;
-    try {
-      await wakeBackend(20_000);
-      await refetch();
-    } finally {
-      wakingRef.current = false;
-    }
-  }, [refetch]);
+  const wakeAndRefetch = useCallback(
+    async (opts?: { purgePersist?: boolean }) => {
+      if (wakingRef.current) return;
+      wakingRef.current = true;
+      try {
+        if (opts?.purgePersist) {
+          // Soft recovery: drop stuck React Query disk cache, keep the login token.
+          try {
+            await indexedDb.del(QUERY_PERSIST_KEY);
+          } catch {
+            // ignore
+          }
+          queryClient.removeQueries({ queryKey: authKeys.me(), exact: true });
+        }
+
+        await wakeBackend(20_000);
+        await queryClient.fetchQuery({
+          queryKey: authKeys.me(),
+          queryFn: () => authApi.me(),
+        });
+      } catch {
+        // fetchQuery throws on failure — useQuery will surface the error.
+      } finally {
+        wakingRef.current = false;
+      }
+    },
+    [queryClient]
+  );
 
   useEffect(() => {
     if (user) lastOkAtRef.current = Date.now();
@@ -167,7 +187,7 @@ export const ProtectedRoute = () => {
         actionLabel={isFetching ? 'جاري المحاولة...' : 'إعادة المحاولة'}
         onAction={() => {
           setAuthTimedOut(false);
-          void wakeAndRefetch();
+          void wakeAndRefetch({ purgePersist: true });
         }}
       />
     );
@@ -185,7 +205,7 @@ export const ProtectedRoute = () => {
         actionLabel={isFetching ? 'جاري إعادة المحاولة...' : 'إعادة المحاولة'}
         onAction={() => {
           setColdStartExhausted(false);
-          void wakeAndRefetch();
+          void wakeAndRefetch({ purgePersist: true });
         }}
       />
     );

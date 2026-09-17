@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { getApiErrorCodes, getApiErrorMessage } from '@shared/lib/apiError';
 import { indexedDb, QUERY_PERSIST_KEY } from '@shared/lib/indexedDb';
-import { wakeBackend } from '@shared/lib/serverWake';
 import { authApi } from './auth.api';
 import { authStorage } from '../lib/authStorage';
 import type { LoginRequest } from '../types/auth.types';
@@ -74,11 +73,7 @@ export const useLoginMutation = () => {
 export const useCurrentUserQuery = (enabled = true) => {
   return useQuery({
     queryKey: authKeys.me(),
-    queryFn: async () => {
-      // Warm sleeping hosts before the real auth call.
-      await wakeBackend(8_000);
-      return authApi.me();
-    },
+    queryFn: () => authApi.me(),
     enabled: enabled && authStorage.isAuthenticated(),
     retry: shouldRetryAuthMe,
     retryDelay: (attempt) => Math.min(1500 * 2 ** attempt, 10_000),
