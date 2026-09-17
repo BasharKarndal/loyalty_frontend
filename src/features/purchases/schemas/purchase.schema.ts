@@ -5,6 +5,11 @@ export const purchaseFormSchema = z.object({
   amount: z.coerce
     .number({ message: 'المبلغ مطلوب' })
     .positive('المبلغ يجب أن يكون أكبر من صفر'),
+  product_type: z
+    .string()
+    .max(120, 'نوع المنتج طويل جداً')
+    .optional()
+    .or(z.literal('')),
   notes: z.string().max(500, 'الملاحظات طويلة جداً').optional().or(z.literal('')),
 });
 

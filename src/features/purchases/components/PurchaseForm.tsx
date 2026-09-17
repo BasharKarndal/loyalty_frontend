@@ -37,6 +37,7 @@ export function PurchaseForm({
     defaultValues: {
       customer_id: purchase?.customer_id ?? defaultCustomerId ?? '',
       amount: purchase ? Number(purchase.amount) : undefined,
+      product_type: purchase?.product_type ?? '',
       notes: purchase?.notes ?? '',
     },
   });
@@ -56,6 +57,7 @@ export function PurchaseForm({
       reset({
         customer_id: purchase.customer_id,
         amount: Number(purchase.amount),
+        product_type: purchase.product_type ?? '',
         notes: purchase.notes ?? '',
       });
     } else if (defaultCustomerId) {
@@ -114,6 +116,13 @@ export function PurchaseForm({
           كل {formatNumber(config.currencyPerPoint)} {config.currency} = نقطة واحدة
         </p>
       </div>
+
+      <Input
+        label="نوع المنتج (اختياري)"
+        placeholder="مثال: قهوة، كيك، وجبة…"
+        error={errors.product_type?.message}
+        {...register('product_type')}
+      />
 
       <Textarea
         label="ملاحظة (اختياري)"

@@ -6,6 +6,7 @@ export interface Purchase {
   owner_id?: string | null;
   amount: string | number;
   points_earned: number;
+  product_type: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -22,11 +23,13 @@ export interface PurchaseListResult {
 export interface CreatePurchasePayload {
   customer_id: string;
   amount: number;
+  product_type?: string | null;
   notes?: string | null;
 }
 
 export interface UpdatePurchasePayload {
   amount: number;
+  product_type?: string | null;
   notes?: string | null;
 }
 

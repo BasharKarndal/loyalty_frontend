@@ -52,6 +52,7 @@ export function PurchaseFormPage() {
   const handleSubmit = (values: PurchaseFormValues | PurchaseEditValues) => {
     const payload = {
       amount: values.amount,
+      product_type: values.product_type?.trim() || null,
       notes: values.notes?.trim() || null,
     };
 
@@ -98,8 +99,8 @@ export function PurchaseFormPage() {
         </h2>
         <p className="mt-1 text-sm text-muted">
           {isEditing
-            ? 'عدّل المبلغ أو الملاحظة — سيتم تحديث نقاط العميل تلقائياً'
-            : 'اختر العميل وأدخل المبلغ لتسجيل المشترى'}
+            ? 'عدّل المبلغ أو نوع المنتج أو الملاحظة — سيتم تحديث نقاط العميل تلقائياً'
+            : 'اختر العميل وأدخل المبلغ — نوع المنتج اختياري'}
         </p>
       </div>
 

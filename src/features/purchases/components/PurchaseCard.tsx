@@ -29,6 +29,9 @@ export function PurchaseCard({ purchase, showEdit, className }: PurchaseCardProp
         </h3>
         <CafeOwnerLabel ownerId={purchase.owner_id} />
         <p className="mt-0.5 text-xs text-muted">{formatDateTime(purchase.created_at)}</p>
+        {purchase.product_type && (
+          <p className="mt-1 text-xs font-semibold text-wheat/90">{purchase.product_type}</p>
+        )}
         {purchase.notes && (
           <p className="mt-1 line-clamp-1 text-xs text-muted">{purchase.notes}</p>
         )}
