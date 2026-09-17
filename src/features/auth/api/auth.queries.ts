@@ -31,9 +31,9 @@ function authErrorMessage(error: unknown, fallback: string): string {
 
 /** Network / cold-start failures — worth retrying. Auth failures are not. */
 function shouldRetryAuthMe(failureCount: number, error: unknown): boolean {
-  if (failureCount >= 4) return false;
+  if (failureCount >= 2) return false;
 
-  if (!isAxiosError(error)) return failureCount < 2;
+  if (!isAxiosError(error)) return failureCount < 1;
 
   const status = error.response?.status;
   if (status === 401 || status === 403 || status === 404) return false;
@@ -47,6 +47,11 @@ async function clearPersistedQueryCache() {
     await indexedDb.del(QUERY_PERSIST_KEY);
   } catch {
     // IndexedDB may be unavailable in private mode — ignore
+  }
+  try {
+    window.localStorage.removeItem(QUERY_PERSIST_KEY);
+  } catch {
+    // ignore
   }
 }
 
@@ -75,7 +80,7 @@ export const useCurrentUserQuery = (enabled = true) => {
     queryFn: authApi.me,
     enabled: enabled && authStorage.isAuthenticated(),
     retry: shouldRetryAuthMe,
-    retryDelay: (attempt) => Math.min(1500 * 2 ** attempt, 12_000),
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 5000),
     staleTime: 60_000,
     gcTime: 30 * 60_000,
     refetchOnWindowFocus: false,

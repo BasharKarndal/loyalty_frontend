@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   AlertCircle,
@@ -8,7 +9,6 @@ import {
   ShoppingBag,
   Users,
 } from 'lucide-react';
-import { useIsRestoring } from '@tanstack/react-query';
 import { APP_NAME } from '@/config/env';
 import { useAuth, isSuperAdmin } from '@/features/auth';
 import { PlatformHomePage } from '@/features/admin';
@@ -65,7 +65,6 @@ function CafeHomePage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const superAdmin = isSuperAdmin(user);
-  const isRestoring = useIsRestoring();
   const { data: settings } = useSettingsQuery();
   const logoSrc = useLogoSrc();
   const { config } = useLoyaltyConfig();
@@ -84,7 +83,7 @@ function CafeHomePage() {
     : settings?.cafe_name?.trim() || APP_NAME;
   const currency = config.currency;
 
-  if (isRestoring || isLoading || (isFetching && !stats)) {
+  if (isLoading || (isFetching && !stats)) {
     return <RouteFallback compact />;
   }
 
