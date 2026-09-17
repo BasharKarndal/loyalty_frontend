@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AlertCircle, Save } from 'lucide-react';
 import { Button, EmptyState, Icon, RouteFallback } from '@shared/components';
+import { getApiErrorMessage } from '@shared/lib/apiError';
 import {
   LoyaltyPreview,
   LogoUploader,
@@ -9,7 +10,7 @@ import {
 import { useSettingsQuery, useUpdateSettingsMutation } from '../api/settings.queries';
 
 export function SettingsPage() {
-  const { data: settings, isLoading, isError, refetch } = useSettingsQuery();
+  const { data: settings, isLoading, isError, error, refetch } = useSettingsQuery();
   const updateSettings = useUpdateSettingsMutation();
 
   const [hydrated, setHydrated] = useState(false);
@@ -37,7 +38,7 @@ export function SettingsPage() {
   if (isError || !settings) {
     return (
       <EmptyState
-        message="تعذر تحميل الإعدادات"
+        message={getApiErrorMessage(error, 'تعذر تحميل الإعدادات')}
         icon={AlertCircle}
         actionLabel="إعادة المحاولة"
         onAction={() => refetch()}

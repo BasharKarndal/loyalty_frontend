@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AlertCircle, Gift, Plus, Settings } from 'lucide-react';
 import { Button, EmptyState, Icon, RouteFallback } from '@shared/components';
+import { getApiErrorMessage } from '@shared/lib/apiError';
 import { formatNumber } from '@shared/lib/format';
 import { isEligibleForAny } from '@shared/lib/loyalty';
 import { useLoyaltyConfig } from '@/features/settings';
@@ -57,7 +58,7 @@ export function GiftsPage() {
     [filter]
   );
 
-  const { data, isLoading, isError, refetch, isFetching } = useGiftsQuery(listParams, syncReady);
+  const { data, isLoading, isError, error, refetch, isFetching } = useGiftsQuery(listParams, syncReady);
   const { data: customersData } = useCustomersQuery({ skip: 0, limit: 200, active_only: true });
   const deliverMutation = useDeliverGiftMutation();
   const cancelMutation = useCancelGiftMutation();
@@ -171,7 +172,7 @@ export function GiftsPage() {
         {(!syncReady || syncPending.isPending || isLoading) && <RouteFallback compact />}
         {syncReady && !syncPending.isPending && !isLoading && isError && (
           <EmptyState
-            message="تعذر تحميل الهدايا"
+            message={getApiErrorMessage(error, 'تعذر تحميل الهدايا')}
             icon={AlertCircle}
             actionLabel="إعادة المحاولة"
             onAction={() => refetch()}

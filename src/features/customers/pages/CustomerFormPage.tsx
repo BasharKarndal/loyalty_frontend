@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowRight, AlertCircle } from 'lucide-react';
 import { EmptyState, Icon, RouteFallback } from '@shared/components';
+import { getApiErrorMessage } from '@shared/lib/apiError';
 import { APP_NAME } from '@/config/env';
 import { useSettingsQuery } from '@/features/settings';
 import { CustomerPermissions, usePermissions } from '@/features/auth/hooks/usePermissions';
@@ -32,7 +33,7 @@ export function CustomerFormPage() {
   const canCreate = can(CustomerPermissions.CREATE);
   const canUpdate = can(CustomerPermissions.UPDATE);
 
-  const { data: customer, isLoading, isError } = useCustomerQuery(isEditing ? id : undefined);
+  const { data: customer, isLoading, isError, error } = useCustomerQuery(isEditing ? id : undefined);
   const createMutation = useCreateCustomerMutation();
   const updateMutation = useUpdateCustomerMutation();
 
@@ -54,7 +55,7 @@ export function CustomerFormPage() {
   if (isEditing && (isError || !customer)) {
     return (
       <EmptyState
-        message="تعذر تحميل بيانات العميل"
+        message={getApiErrorMessage(error, 'تعذر تحميل بيانات العميل')}
         icon={AlertCircle}
         actionLabel="العودة للقائمة"
         onAction={() => navigate('/customers')}

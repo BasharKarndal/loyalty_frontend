@@ -1,6 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { AlertCircle, CalendarClock, TimerReset, UserPlus, Users } from 'lucide-react';
 import { EmptyState, Icon, RouteFallback } from '@shared/components';
+import { getApiErrorMessage } from '@shared/lib/apiError';
 import { formatDate, formatNumber } from '@shared/lib/format';
 import { DashboardStatTile } from '@/features/home/components/DashboardStatTile';
 import { useManagedUsersQuery } from '../api/admin.queries';
@@ -9,14 +10,14 @@ import { getUserBookingStatus } from '../types/admin.types';
 
 export function PlatformHomePage() {
   const navigate = useNavigate();
-  const { data, isLoading, isError, refetch } = useManagedUsersQuery();
+  const { data, isLoading, isError, error, refetch } = useManagedUsersQuery();
 
   if (isLoading) return <RouteFallback compact />;
 
   if (isError || !data) {
     return (
       <EmptyState
-        message="تعذر تحميل لوحة الإدارة"
+        message={getApiErrorMessage(error, 'تعذر تحميل لوحة الإدارة')}
         icon={AlertCircle}
         actionLabel="إعادة المحاولة"
         onAction={() => refetch()}

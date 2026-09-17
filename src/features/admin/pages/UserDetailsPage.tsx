@@ -18,6 +18,7 @@ import {
   Icon,
   RouteFallback,
 } from '@shared/components';
+import { getApiErrorMessage } from '@shared/lib/apiError';
 import {
   customerInitial,
   formatCurrency,
@@ -38,7 +39,7 @@ export function UserDetailsPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { data, isLoading, isError, refetch } = useManagedUserOverviewQuery(id);
+  const { data, isLoading, isError, error, refetch } = useManagedUserOverviewQuery(id);
   const [editing, setEditing] = useState(false);
   const [extending, setExtending] = useState(false);
 
@@ -54,7 +55,7 @@ export function UserDetailsPage() {
   if (isError || !data) {
     return (
       <EmptyState
-        message="تعذر تحميل تفاصيل الحساب"
+        message={getApiErrorMessage(error, 'تعذر تحميل تفاصيل الحساب')}
         icon={AlertCircle}
         actionLabel="إعادة المحاولة"
         onAction={() => refetch()}

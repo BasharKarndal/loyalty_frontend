@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { AlertCircle, Plus, QrCode, Users } from 'lucide-react';
 import { Button, EmptyState, Icon, RouteFallback, SearchField } from '@shared/components';
 import { useDebouncedValue } from '@shared/hooks/useDebouncedValue';
+import { getApiErrorMessage } from '@shared/lib/apiError';
 import { formatNumber } from '@shared/lib/format';
 import { CustomerPermissions, usePermissions } from '@/features/auth/hooks/usePermissions';
 import {
@@ -42,7 +43,7 @@ export function CustomersPage() {
     [debouncedSearch, filter]
   );
 
-  const { data, isLoading, isError, refetch, isFetching } = useCustomersQuery(queryParams);
+  const { data, isLoading, isError, error, refetch, isFetching } = useCustomersQuery(queryParams);
 
   const visibleCustomers = useMemo(() => {
     if (!data?.items) return [];
@@ -124,7 +125,7 @@ export function CustomersPage() {
 
       {isError && (
         <EmptyState
-          message="تعذر تحميل العملاء"
+          message={getApiErrorMessage(error, 'تعذر تحميل العملاء')}
           description="تحقق من الاتصال وحاول مرة أخرى"
           icon={AlertCircle}
           actionLabel="إعادة المحاولة"

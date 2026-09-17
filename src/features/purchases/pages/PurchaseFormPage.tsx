@@ -1,6 +1,7 @@
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { AlertCircle, ArrowRight } from 'lucide-react';
 import { EmptyState, Icon, RouteFallback } from '@shared/components';
+import { getApiErrorMessage } from '@shared/lib/apiError';
 import { PurchasePermissions, usePermissions } from '@/features/auth';
 import {
   useCreatePurchaseMutation,
@@ -22,7 +23,7 @@ export function PurchaseFormPage() {
   const canUpdate = can(PurchasePermissions.UPDATE);
   const allowed = isEditing ? canUpdate : canCreate;
 
-  const { data: purchase, isLoading, isError } = usePurchaseQuery(isEditing ? id : undefined);
+  const { data: purchase, isLoading, isError, error } = usePurchaseQuery(isEditing ? id : undefined);
   const createMutation = useCreatePurchaseMutation();
   const updateMutation = useUpdatePurchaseMutation();
 
@@ -41,7 +42,7 @@ export function PurchaseFormPage() {
   if (isEditing && (isError || !purchase)) {
     return (
       <EmptyState
-        message="تعذر تحميل بيانات المشترى"
+        message={getApiErrorMessage(error, 'تعذر تحميل بيانات المشترى')}
         icon={AlertCircle}
         actionLabel="العودة للقائمة"
         onAction={() => navigate('/purchases')}

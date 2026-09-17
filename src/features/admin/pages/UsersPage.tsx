@@ -9,6 +9,7 @@ import {
   SearchField,
 } from '@shared/components';
 import { useDebouncedValue } from '@shared/hooks/useDebouncedValue';
+import { getApiErrorMessage } from '@shared/lib/apiError';
 import { formatDate, formatNumber } from '@shared/lib/format';
 import { cn } from '@shared/lib/cn';
 import { useManagedUsersQuery } from '../api/admin.queries';
@@ -39,7 +40,7 @@ export function UsersPage() {
   const [extending, setExtending] = useState<ManagedUser | null>(null);
   const navigate = useNavigate();
   const debouncedSearch = useDebouncedValue(search.trim());
-  const { data, isLoading, isError, refetch } = useManagedUsersQuery(debouncedSearch);
+  const { data, isLoading, isError, error, refetch } = useManagedUsersQuery(debouncedSearch);
 
   const items = useMemo(() => {
     const list = data?.items ?? [];
@@ -52,7 +53,7 @@ export function UsersPage() {
   if (isError || !data) {
     return (
       <EmptyState
-        message="تعذر تحميل المستخدمين"
+        message={getApiErrorMessage(error, 'تعذر تحميل المستخدمين')}
         icon={AlertCircle}
         actionLabel="إعادة المحاولة"
         onAction={() => refetch()}

@@ -9,6 +9,7 @@ import {
   Modal,
   RouteFallback,
 } from '@shared/components';
+import { getApiErrorMessage } from '@shared/lib/apiError';
 import {
   GiftTypePermissions,
   usePermissions,
@@ -33,7 +34,7 @@ export function GiftTypesPage() {
   const canUpdate = can(GiftTypePermissions.UPDATE);
   const canDelete = can(GiftTypePermissions.DELETE);
 
-  const { data: giftTypes = [], isLoading, isError, refetch } = useGiftTypesQuery(true);
+  const { data: giftTypes = [], isLoading, isError, error, refetch } = useGiftTypesQuery(true);
   const createMutation = useCreateGiftTypeMutation();
   const updateMutation = useUpdateGiftTypeMutation();
   const deleteMutation = useDeleteGiftTypeMutation();
@@ -105,7 +106,11 @@ export function GiftTypesPage() {
 
       {isLoading && <RouteFallback compact />}
       {isError && (
-        <EmptyState message="تعذر تحميل أنواع الهدايا" actionLabel="إعادة المحاولة" onAction={() => refetch()} />
+        <EmptyState
+          message={getApiErrorMessage(error, 'تعذر تحميل أنواع الهدايا')}
+          actionLabel="إعادة المحاولة"
+          onAction={() => refetch()}
+        />
       )}
 
       {!isLoading && !isError && active.length === 0 && (

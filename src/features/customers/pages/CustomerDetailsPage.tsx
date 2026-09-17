@@ -16,6 +16,7 @@ import {
   Modal,
   RouteFallback,
 } from '@shared/components';
+import { getApiErrorMessage } from '@shared/lib/apiError';
 import { formatNumber } from '@shared/lib/format';
 import {
   loyaltyEligible,
@@ -102,7 +103,7 @@ export function CustomerDetailsPage() {
 
   const [redeemOpen, setRedeemOpen] = useState(false);
 
-  const { data: customer, isLoading, isError, refetch } = useCustomerQuery(id);
+  const { data: customer, isLoading, isError, error, refetch } = useCustomerQuery(id);
   const { data: purchasesData, isLoading: purchasesLoading } = usePurchasesQuery(
     { customer_id: id!, skip: 0, limit: 20 },
     Boolean(id)
@@ -129,7 +130,7 @@ export function CustomerDetailsPage() {
   if (isError || !customer) {
     return (
       <EmptyState
-        message="تعذر تحميل بيانات العميل"
+        message={getApiErrorMessage(error, 'تعذر تحميل بيانات العميل')}
         icon={AlertCircle}
         actionLabel="العودة للقائمة"
         onAction={() => navigate('/customers')}

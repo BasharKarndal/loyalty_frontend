@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import { APP_NAME } from '@/config/env';
 import { useLoyaltyConfig, useLogoSrc, useSettingsQuery } from '@/features/settings';
 import { Button, EmptyState, Icon, RouteFallback } from '@shared/components';
+import { getApiErrorMessage } from '@shared/lib/apiError';
 import { customerInitial, formatCurrency, formatNumber } from '@shared/lib/format';
 import { formatShortDate, resolveReportRange, toInputDateUtc } from '@shared/lib/reportRange';
 import { useReportStatsQuery } from '../api/reports.queries';
@@ -105,12 +106,10 @@ export function ReportsPage() {
   if (isLoading) return <RouteFallback compact />;
 
   if (isError || !stats) {
-    const errorMessage =
-      error instanceof Error ? error.message : 'تحقق من الاتصال بالخادم وحاول مرة أخرى';
     return (
       <EmptyState
-        message="تعذر تحميل التقرير"
-        description={errorMessage}
+        message={getApiErrorMessage(error, 'تعذر تحميل التقرير')}
+        description="تحقق من الاتصال بالخادم وحاول مرة أخرى"
         icon={AlertCircle}
         actionLabel="إعادة المحاولة"
         onAction={() => refetch()}

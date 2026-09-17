@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AlertCircle, CalendarClock, CalendarPlus } from 'lucide-react';
 import { Button, EmptyState, Icon, RouteFallback } from '@shared/components';
+import { getApiErrorMessage } from '@shared/lib/apiError';
 import { formatDate, formatNumber } from '@shared/lib/format';
 import { cn } from '@shared/lib/cn';
 import { useBookingsQuery } from '../api/admin.queries';
@@ -25,7 +26,7 @@ export function BookingsPage() {
   const navigate = useNavigate();
   const [filter, setFilter] = useState<FilterKey>('all');
   const [extending, setExtending] = useState<BookingItem | null>(null);
-  const { data, isLoading, isError, refetch } = useBookingsQuery();
+  const { data, isLoading, isError, error, refetch } = useBookingsQuery();
 
   const items = useMemo(() => {
     const list = data?.items ?? [];
@@ -38,7 +39,7 @@ export function BookingsPage() {
   if (isError || !data) {
     return (
       <EmptyState
-        message="تعذر تحميل الحجوزات"
+        message={getApiErrorMessage(error, 'تعذر تحميل الحجوزات')}
         icon={AlertCircle}
         actionLabel="إعادة المحاولة"
         onAction={() => refetch()}

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { AlertCircle, Plus, ShoppingBag } from 'lucide-react';
 import { Button, EmptyState, Icon, RouteFallback, SearchField } from '@shared/components';
 import { useDebouncedValue } from '@shared/hooks/useDebouncedValue';
+import { getApiErrorMessage } from '@shared/lib/apiError';
 import { formatCurrency, formatNumber } from '@shared/lib/format';
 import { PurchasePermissions, usePermissions } from '@/features/auth';
 import { useLoyaltyConfig } from '@/features/settings';
@@ -32,7 +33,7 @@ export function PurchasesPage() {
     [debouncedSearch, period]
   );
 
-  const { data, isLoading, isError, refetch, isFetching } = usePurchasesQuery(queryParams);
+  const { data, isLoading, isError, error, refetch, isFetching } = usePurchasesQuery(queryParams);
 
   return (
     <div className="page-shell mx-auto max-w-4xl space-y-4">
@@ -79,7 +80,7 @@ export function PurchasesPage() {
 
       {isError && (
         <EmptyState
-          message="تعذر تحميل المشتريات"
+          message={getApiErrorMessage(error, 'تعذر تحميل المشتريات')}
           icon={AlertCircle}
           actionLabel="إعادة المحاولة"
           onAction={() => refetch()}
