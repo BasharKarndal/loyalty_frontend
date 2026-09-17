@@ -1,8 +1,16 @@
 import { indexedDb, QUERY_PERSIST_KEY, STORAGE_KEYS } from '@shared/lib/indexedDb';
 import { authStorage } from '@features/auth/lib/authStorage';
+import { isRememberAccountEnabled } from '@features/auth/lib/rememberAccount';
 
-/** After this much inactivity, the next visit clears the session (avoids stuck loading). */
+/** Default idle window when "remember account" is off. */
 export const IDLE_LOGOUT_MS = 2 * 60 * 60 * 1000; // 2 hours
+
+/** Longer idle window when the user opted into "remember account". */
+export const REMEMBER_IDLE_LOGOUT_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+export function getIdleLogoutMs(): number {
+  return isRememberAccountEnabled() ? REMEMBER_IDLE_LOGOUT_MS : IDLE_LOGOUT_MS;
+}
 
 export function touchSessionActivity(at = Date.now()): void {
   indexedDb.setSync(STORAGE_KEYS.lastActivity, String(at));
@@ -16,10 +24,10 @@ export function getLastSessionActivity(): number {
 
 export function isSessionIdle(now = Date.now()): boolean {
   if (!authStorage.isAuthenticated()) return false;
-  return now - getLastSessionActivity() >= IDLE_LOGOUT_MS;
+  return now - getLastSessionActivity() >= getIdleLogoutMs();
 }
 
-/** Sync clear of token + query disk cache. Caller should also clear React Query memory. */
+/** Sync clear of token + query disk cache. Keeps remembered username. */
 export function clearIdleSessionLocally(): void {
   authStorage.clearToken();
   indexedDb.delSync(STORAGE_KEYS.lastActivity);

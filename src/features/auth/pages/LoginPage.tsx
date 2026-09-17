@@ -7,6 +7,11 @@ import { BrandLogo, Button, Icon, Input } from '@shared/components';
 import { AuthShell } from '../components/AuthShell';
 import { loginSchema, type LoginSchema } from '../schemas/login.schema';
 import { useAuth } from '../hooks/useAuth';
+import {
+  getRememberedUsername,
+  isRememberAccountEnabled,
+  setRememberAccount,
+} from '../lib/rememberAccount';
 
 export const LoginPage = () => {
   const navigate = useNavigate();
@@ -14,6 +19,9 @@ export const LoginPage = () => {
   const { isAuthenticated, login, isLoggingIn } = useAuth();
   const [searchParams] = useSearchParams();
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberAccount, setRememberAccountChecked] = useState(() =>
+    isRememberAccountEnabled()
+  );
   const accessReason = searchParams.get('reason');
   const from =
     (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ||
@@ -26,7 +34,7 @@ export const LoginPage = () => {
   } = useForm<LoginSchema>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      username: '',
+      username: getRememberedUsername(),
       password: '',
     },
   });
@@ -37,7 +45,10 @@ export const LoginPage = () => {
 
   const onSubmit = (data: LoginSchema) => {
     login(data, {
-      onSuccess: () => navigate(from, { replace: true }),
+      onSuccess: () => {
+        setRememberAccount(rememberAccount, data.username);
+        navigate(from, { replace: true });
+      },
     });
   };
 
@@ -124,6 +135,17 @@ export const LoginPage = () => {
             <p className="mt-1.5 text-sm text-danger">{errors.password.message}</p>
           )}
         </div>
+
+        <label className="flex cursor-pointer items-center gap-2.5 select-none">
+          <input
+            type="checkbox"
+            checked={rememberAccount}
+            onChange={(e) => setRememberAccountChecked(e.target.checked)}
+            className="h-4 w-4 rounded border-line accent-wheat"
+          />
+          <span className="text-sm font-medium text-ink">تذكر الحساب</span>
+          <span className="text-xs text-muted">(يحفظ اسم المستخدم ويبقي الجلسة أطول)</span>
+        </label>
 
         <Button type="submit" className="w-full" size="lg" disabled={isLoggingIn}>
           <Icon icon={LogIn} size="sm" />

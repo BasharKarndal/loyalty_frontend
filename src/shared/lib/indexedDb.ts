@@ -11,6 +11,8 @@ export const STORAGE_KEYS = {
   workspace: 'gm-workspace-owner-id',
   queryCache: 'loyalty-react-query',
   lastActivity: 'last_activity_at',
+  rememberAccount: 'remember_account',
+  rememberedUsername: 'remembered_username',
 } as const;
 
 
