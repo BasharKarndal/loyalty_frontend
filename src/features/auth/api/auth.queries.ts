@@ -1,3 +1,4 @@
+import { isAxiosError } from 'axios';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { getApiErrorCodes, getApiErrorMessage } from '@shared/lib/apiError';
@@ -27,6 +28,19 @@ function authErrorMessage(error: unknown, fallback: string): string {
   return map[message] || message;
 }
 
+/** Network / cold-start failures — worth retrying. Auth failures are not. */
+function shouldRetryAuthMe(failureCount: number, error: unknown): boolean {
+  if (failureCount >= 4) return false;
+
+  if (!isAxiosError(error)) return failureCount < 2;
+
+  const status = error.response?.status;
+  if (status === 401 || status === 403 || status === 404) return false;
+
+  // No response = timeout / offline / Railway waking up
+  return true;
+}
+
 export const useLoginMutation = () => {
   const queryClient = useQueryClient();
 
@@ -48,10 +62,13 @@ export const useCurrentUserQuery = (enabled = true) => {
     queryKey: authKeys.me(),
     queryFn: authApi.me,
     enabled: enabled && authStorage.isAuthenticated(),
-    retry: false,
-    staleTime: 0,
-    refetchOnWindowFocus: true,
-    refetchOnMount: 'always',
+    retry: shouldRetryAuthMe,
+    retryDelay: (attempt) => Math.min(1500 * 2 ** attempt, 12_000),
+    staleTime: 60_000,
+    gcTime: 30 * 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: true,
+    refetchOnReconnect: true,
   });
 };
 
@@ -73,3 +90,5 @@ export const useLogoutMutation = () => {
     },
   });
 };
+
+export { authErrorMessage };
