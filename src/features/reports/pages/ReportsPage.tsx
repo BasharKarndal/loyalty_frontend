@@ -316,7 +316,7 @@ export function ReportsPage() {
         </section>
 
         <footer className="border-t border-[#e5eaf0] pt-3 text-center text-[11px] text-[#5a6278]">
-          تم إنشاء التقرير بواسطة نظام ولاء — {new Intl.DateTimeFormat('ar-IQ', { dateStyle: 'full', timeStyle: 'short' }).format(new Date())}
+          تم إنشاء التقرير بواسطة نظام ولاء — {new Intl.DateTimeFormat('en-GB', { dateStyle: 'full', timeStyle: 'short' }).format(new Date())}
         </footer>
       </div>
     </div>

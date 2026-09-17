@@ -73,16 +73,25 @@ export function downloadBlob(blob: Blob, filename: string) {
 export type ShareQrResult = 'shared' | 'clipboard' | 'downloaded';
 
 /**
- * Shares QR image via native share sheet, clipboard, or download fallback.
- * Note: wa.me links cannot attach images — only Web Share API or clipboard work.
+ * Shares an image via native share sheet, clipboard, or download fallback.
  */
-export async function shareQrImage(blob: Blob, message: string): Promise<ShareQrResult> {
-  const file = new File([blob], 'customer-qr.png', { type: 'image/png' });
+export async function shareImageBlob(
+  blob: Blob,
+  options: {
+    filename?: string;
+    title?: string;
+    message?: string;
+  } = {}
+): Promise<ShareQrResult> {
+  const filename = options.filename ?? 'loyalty-card.png';
+  const title = options.title ?? 'بطاقة ولاء';
+  const message = options.message ?? '';
+  const file = new File([blob], filename, { type: blob.type || 'image/png' });
 
   if (typeof navigator.share === 'function') {
     const attempts: ShareData[] = [
-      { files: [file], text: message, title: 'رمز عضوية ولاء' },
-      { files: [file], title: 'رمز عضوية ولاء' },
+      { files: [file], text: message, title },
+      { files: [file], title },
       { files: [file] },
     ];
 
@@ -99,10 +108,9 @@ export async function shareQrImage(blob: Blob, message: string): Promise<ShareQr
       }
     }
 
-    // Text-only share as last Web Share attempt (some mobile browsers reject files)
     try {
-      await navigator.share({ text: message, title: 'رمز عضوية ولاء' });
-      downloadBlob(blob, 'customer-qr.png');
+      await navigator.share({ text: message || title, title });
+      downloadBlob(blob, filename);
       return 'downloaded';
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
@@ -113,13 +121,25 @@ export async function shareQrImage(blob: Blob, message: string): Promise<ShareQr
 
   if (navigator.clipboard?.write && typeof ClipboardItem !== 'undefined' && !isMobileDevice()) {
     try {
-      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+      await navigator.clipboard.write([new ClipboardItem({ [blob.type || 'image/png']: blob })]);
       return 'clipboard';
     } catch {
       // fall through to download
     }
   }
 
-  downloadBlob(blob, 'customer-qr.png');
+  downloadBlob(blob, filename);
   return 'downloaded';
+}
+
+/**
+ * Shares QR image via native share sheet, clipboard, or download fallback.
+ * Note: wa.me links cannot attach images — only Web Share API or clipboard work.
+ */
+export async function shareQrImage(blob: Blob, message: string): Promise<ShareQrResult> {
+  return shareImageBlob(blob, {
+    filename: 'customer-qr.png',
+    title: 'رمز عضوية ولاء',
+    message,
+  });
 }

@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   AlertCircle,
   ArrowRight,
+  CreditCard,
   Gift,
   Pencil,
   Plus,
@@ -34,6 +35,7 @@ import {
   CustomerStatsRow,
 } from '../components/CustomerProfileHeader';
 import { CustomerQrPanel } from '../components/CustomerQrPanel';
+import { CustomerLoyaltyCard } from '../components/CustomerLoyaltyCard';
 import { usePurchasesQuery } from '@/features/purchases/api/purchases.queries';
 import { PurchaseCard } from '@/features/purchases/components/PurchaseCard';
 import { useGiftsQuery, useGiftTypesQuery, useDeliverGiftMutation, useCancelGiftMutation } from '@/features/gifts/api/gifts.queries';
@@ -197,6 +199,13 @@ export function CustomerDetailsPage() {
 
       <CustomerProfileHeader customer={customer} />
       <CustomerStatsRow customer={customer} />
+
+      <SectionCard title="بطاقة الولاء" icon={CreditCard}>
+        <p className="mb-4 text-sm text-muted">
+          بطاقة أنيقة لمشاركتها مع العميل — تتضمن الزيارات والنقاط وإجمالي المدفوع مع رمز QR.
+        </p>
+        <CustomerLoyaltyCard customer={customer} />
+      </SectionCard>
 
       <SectionCard title="تقدم الهدايا" icon={Gift}>
         <div className="space-y-3">

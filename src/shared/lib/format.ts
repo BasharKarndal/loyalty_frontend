@@ -1,7 +1,8 @@
 export function formatNumber(value: number | string): string {
   const num = typeof value === 'string' ? Number(value) : value;
   if (Number.isNaN(num)) return '0';
-  return new Intl.NumberFormat('ar-IQ').format(num);
+  // Western/English digits (0-9) while keeping Arabic UI copy elsewhere.
+  return new Intl.NumberFormat('en-US').format(num);
 }
 
 export function formatCurrency(value: number | string, currency = 'د.ع'): string {
@@ -13,17 +14,23 @@ export function formatCurrency(value: number | string, currency = 'د.ع'): stri
 export function formatDate(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat('ar-IQ', {
-    dateStyle: 'medium',
+  return new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
   }).format(date);
 }
 
 export function formatDateTime(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat('ar-IQ', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
+  return new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
   }).format(date);
 }
 

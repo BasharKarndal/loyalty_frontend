@@ -75,7 +75,7 @@ function buildTopCustomersRows(stats: ReportStats, currency: string): string {
 
 export function buildReportExportHtml(input: ReportExportDocumentInput): string {
   const { stats, cafeName, rangeLabel, currency, logoDataUrl } = input;
-  const generatedAt = new Intl.DateTimeFormat('ar-IQ', {
+  const generatedAt = new Intl.DateTimeFormat('en-GB', {
     dateStyle: 'full',
     timeStyle: 'short',
   }).format(new Date());

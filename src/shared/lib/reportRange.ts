@@ -65,7 +65,12 @@ export function resolveReportRange(
 
 export function formatShortDate(value: Date | string): string {
   const date = typeof value === 'string' ? new Date(value) : value;
-  return new Intl.DateTimeFormat('ar-IQ', { dateStyle: 'medium', timeZone: 'UTC' }).format(date);
+  return new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(date);
 }
 
 export function toApiDateTime(date: Date): string {
