@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import html2canvas from 'html2canvas';
-import { Download, Share2, Sparkles } from 'lucide-react';
+import { Download, MessageCircle, Share2, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button, Icon } from '@shared/components';
 import { encodeCustomerQr, formatCurrency, formatNumber } from '@shared/lib/format';
+import { buildLoyaltyCardTextMessage } from '@shared/lib/whatsappMessages';
 import {
-  downloadBlob,
   generateQrDataUrl,
   isMobileDevice,
+  openSms,
   openWhatsApp,
+  saveOrShareImageBlob,
   shareImageBlob,
 } from '@shared/lib/whatsapp';
 import { useLogoSrc, useSettingsQuery } from '@/features/settings';
@@ -20,6 +22,19 @@ interface CustomerLoyaltyCardProps {
   customer: Customer;
 }
 
+async function toDataUrl(src: string): Promise<string> {
+  if (src.startsWith('data:')) return src;
+  const response = await fetch(src);
+  if (!response.ok) throw new Error('IMAGE_FETCH_FAILED');
+  const blob = await response.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
 export function CustomerLoyaltyCard({ customer }: CustomerLoyaltyCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const { data: settings } = useSettingsQuery();
@@ -27,11 +42,22 @@ export function CustomerLoyaltyCard({ customer }: CustomerLoyaltyCardProps) {
   const [qrSrc, setQrSrc] = useState<string | null>(null);
   const [sharing, setSharing] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [messaging, setMessaging] = useState(false);
 
   const cafeName = settings?.cafe_name?.trim() || APP_NAME;
   const currency = settings?.currency || 'د.ع';
   const qrPayload = encodeCustomerQr(customer.id);
   const safeName = customer.name.replace(/[^\w\u0600-\u06FF]+/g, '_') || 'customer';
+  const filename = `loyalty_card_${safeName}.png`;
+
+  const textMessage = buildLoyaltyCardTextMessage({
+    customerName: customer.name,
+    phone: customer.phone,
+    cafeName,
+    visits: formatNumber(customer.visit_count),
+    points: formatNumber(customer.points),
+    spent: formatCurrency(customer.total_spent, currency),
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -47,23 +73,78 @@ export function CustomerLoyaltyCard({ customer }: CustomerLoyaltyCardProps) {
     const node = cardRef.current;
     if (!node) throw new Error('CARD_MISSING');
 
-    const canvas = await html2canvas(node, {
-      backgroundColor: null,
-      scale: 2,
-      useCORS: true,
-      logging: false,
+    // Wait a frame so layout/QR paint before capture (important on mobile).
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
     });
 
-    return new Promise((resolve, reject) => {
-      canvas.toBlob(
-        (blob) => {
-          if (!blob || blob.size === 0) reject(new Error('CARD_BLOB_EMPTY'));
-          else resolve(blob);
-        },
-        'image/png',
-        1
-      );
+    const clone = node.cloneNode(true) as HTMLElement;
+    clone.style.position = 'fixed';
+    clone.style.left = '-9999px';
+    clone.style.top = '0';
+    clone.style.zIndex = '-1';
+    clone.style.width = `${node.offsetWidth || 352}px`;
+    clone.style.transform = 'none';
+    clone.style.pointerEvents = 'none';
+
+    // Convert images to data URLs so html2canvas does not hit CORS / blob issues on mobile.
+    const sourceImgs = Array.from(node.querySelectorAll('img'));
+    const cloneImgs = Array.from(clone.querySelectorAll('img'));
+    await Promise.all(
+      cloneImgs.map(async (img, index) => {
+        const original = sourceImgs[index];
+        const src = original?.currentSrc || original?.src || img.src;
+        if (!src) return;
+        try {
+          const dataUrl = await toDataUrl(src);
+          img.setAttribute('src', dataUrl);
+          img.removeAttribute('crossorigin');
+        } catch {
+          // Keep original src; capture may still succeed for data URLs / same-origin.
+        }
+      })
+    );
+
+    // backdrop-blur / filters often break html2canvas on mobile WebKit.
+    clone.querySelectorAll('*').forEach((el) => {
+      const htmlEl = el as HTMLElement;
+      htmlEl.style.backdropFilter = 'none';
+      htmlEl.style.setProperty('-webkit-backdrop-filter', 'none');
+      htmlEl.style.filter = 'none';
     });
+
+    document.body.appendChild(clone);
+
+    try {
+      const canvas = await html2canvas(clone, {
+        backgroundColor: '#0f1f3d',
+        scale: Math.min(2, window.devicePixelRatio || 2),
+        useCORS: true,
+        allowTaint: false,
+        logging: false,
+        foreignObjectRendering: false,
+        imageTimeout: 8_000,
+      });
+
+      if (!canvas.width || !canvas.height) {
+        throw new Error('CARD_CANVAS_EMPTY');
+      }
+
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob(
+          (result) => {
+            if (!result || result.size === 0) reject(new Error('CARD_BLOB_EMPTY'));
+            else resolve(result);
+          },
+          'image/png',
+          1
+        );
+      });
+
+      return blob;
+    } finally {
+      clone.remove();
+    }
   };
 
   const shareMessage = `بطاقة ولاء ${customer.name} — ${cafeName}`;
@@ -72,10 +153,19 @@ export function CustomerLoyaltyCard({ customer }: CustomerLoyaltyCardProps) {
     setDownloading(true);
     try {
       const blob = await captureCard();
-      downloadBlob(blob, `loyalty_card_${safeName}.png`);
-      toast.success('تم تحميل بطاقة الولاء');
-    } catch {
-      toast.error('تعذر تحميل البطاقة');
+      const result = await saveOrShareImageBlob(blob, filename, 'بطاقة ولاء');
+      toast.success(
+        result === 'shared'
+          ? isMobileDevice()
+            ? 'اختر حفظ الصورة أو مشاركتها'
+            : 'تمت مشاركة البطاقة'
+          : isMobileDevice()
+            ? 'افتح الصورة واحفظها من المتصفح'
+            : 'تم تحميل بطاقة الولاء'
+      );
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
+      toast.error('تعذر تحميل البطاقة — جرّب مرة أخرى');
     } finally {
       setDownloading(false);
     }
@@ -86,7 +176,7 @@ export function CustomerLoyaltyCard({ customer }: CustomerLoyaltyCardProps) {
     try {
       const blob = await captureCard();
       const result = await shareImageBlob(blob, {
-        filename: `loyalty_card_${safeName}.png`,
+        filename,
         title: 'بطاقة ولاء',
         message: shareMessage,
       });
@@ -99,30 +189,64 @@ export function CustomerLoyaltyCard({ customer }: CustomerLoyaltyCardProps) {
         if (customer.phone) {
           openWhatsApp(
             customer.phone,
-            `${shareMessage}\n\n📎 تم نسخ صورة البطاقة — الصقها في المحادثة.`
+            `${textMessage}\n\n📎 تم نسخ صورة البطاقة — الصقها في المحادثة.`
           );
         }
         toast.success('تم نسخ البطاقة — الصقها في واتساب');
         return;
       }
 
-      if (customer.phone) openWhatsApp(customer.phone, shareMessage);
+      if (customer.phone) openWhatsApp(customer.phone, textMessage);
       toast.message(
         isMobileDevice()
-          ? 'تم تحميل البطاقة — أرفقها من الملفات في واتساب'
+          ? 'تم تجهيز البطاقة — احفظ الصورة ثم أرفقها من الملفات في واتساب'
           : 'تم تحميل البطاقة — أرفقها يدوياً',
         { duration: 7000 }
       );
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') return;
-      toast.error('تعذر مشاركة البطاقة');
+      toast.error('تعذر مشاركة البطاقة — جرّب إرسال الرسالة النصية');
     } finally {
       setSharing(false);
     }
   };
 
-  const cafeTitleClass =
-    'truncate text-base font-extrabold leading-tight';
+  const handleSendText = async () => {
+    if (!customer.phone) {
+      toast.error('لا يوجد رقم هاتف لهذا العميل');
+      return;
+    }
+
+    setMessaging(true);
+    try {
+      // Prefer WhatsApp (most common for cafe customers); SMS as secondary on mobile.
+      const sentWa = openWhatsApp(customer.phone, textMessage);
+      if (sentWa) {
+        toast.success('تم فتح واتساب برسالة بيانات البطاقة');
+        return;
+      }
+
+      if (isMobileDevice() && openSms(customer.phone, textMessage)) {
+        toast.success('تم فتح تطبيق الرسائل');
+        return;
+      }
+
+      if (typeof navigator.share === 'function') {
+        await navigator.share({ title: 'بطاقة ولاء', text: textMessage });
+        toast.success('اختر تطبيقاً لإرسال الرسالة');
+        return;
+      }
+
+      toast.error('تعذر فتح تطبيق المراسلة');
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
+      toast.error('تعذر إرسال الرسالة');
+    } finally {
+      setMessaging(false);
+    }
+  };
+
+  const cafeTitleClass = 'truncate text-base font-extrabold leading-tight';
 
   return (
     <div className="space-y-4">
@@ -159,7 +283,6 @@ export function CustomerLoyaltyCard({ customer }: CustomerLoyaltyCardProps) {
                 <img
                   src={logoSrc ?? brandLogo}
                   alt={cafeName}
-                  crossOrigin="anonymous"
                   className="h-12 w-12 rounded-2xl border border-white/25 object-cover shadow-lg"
                 />
                 <div className="min-w-0">
@@ -216,25 +339,35 @@ export function CustomerLoyaltyCard({ customer }: CustomerLoyaltyCardProps) {
         </div>
       </div>
 
-      <div className="flex flex-col gap-2 sm:flex-row">
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
         <Button
           type="button"
-          className="flex-1 bg-[#25D366] text-white hover:bg-[#20bd5a]"
+          className="flex-1 bg-[#25D366] text-white hover:bg-[#20bd5a] sm:min-w-[10rem]"
           onClick={handleShare}
           disabled={sharing || !qrSrc}
         >
           <Icon icon={Share2} size="sm" />
-          {sharing ? 'جاري التحضير...' : 'مشاركة البطاقة'}
+          {sharing ? 'جاري التحضير...' : 'مشاركة الصورة'}
         </Button>
         <Button
           type="button"
           variant="outline"
-          className="flex-1"
+          className="flex-1 sm:min-w-[10rem]"
           onClick={handleDownload}
           disabled={downloading || !qrSrc}
         >
           <Icon icon={Download} size="sm" />
-          {downloading ? 'جاري التحميل...' : 'تحميل البطاقة'}
+          {downloading ? 'جاري التجهيز...' : 'تحميل / حفظ'}
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          className="flex-1 border-[#25D366]/40 text-[#128C7E] sm:min-w-[10rem]"
+          onClick={handleSendText}
+          disabled={messaging || !customer.phone}
+        >
+          <Icon icon={MessageCircle} size="sm" />
+          {messaging ? 'جاري الفتح...' : 'إرسال رسالة البيانات'}
         </Button>
       </div>
     </div>
@@ -251,7 +384,7 @@ function StatBlock({
   compact?: boolean;
 }) {
   return (
-    <div className="rounded-2xl border border-white/15 bg-white/10 px-2.5 py-3 backdrop-blur-sm">
+    <div className="rounded-2xl border border-white/15 bg-white/10 px-2.5 py-3">
       <p className="text-[10px] font-bold text-white/55">{label}</p>
       <p
         className={

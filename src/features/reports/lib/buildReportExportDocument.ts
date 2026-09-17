@@ -76,8 +76,12 @@ function buildTopCustomersRows(stats: ReportStats, currency: string): string {
 export function buildReportExportHtml(input: ReportExportDocumentInput): string {
   const { stats, cafeName, rangeLabel, currency, logoDataUrl } = input;
   const generatedAt = new Intl.DateTimeFormat('en-GB', {
-    dateStyle: 'full',
-    timeStyle: 'short',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
   }).format(new Date());
 
   const logoBlock = logoDataUrl

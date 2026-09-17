@@ -60,6 +60,23 @@ export async function generateQrDataUrl(payload: string, size = 240): Promise<st
 
 export function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
+
+  // iOS Safari often ignores the download attribute — open the image so the user can save it.
+  if (isMobileDevice()) {
+    const opened = window.open(url, '_blank', 'noopener,noreferrer');
+    if (!opened) {
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.target = '_blank';
+      anchor.rel = 'noopener noreferrer';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+    }
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    return;
+  }
+
   const anchor = document.createElement('a');
   anchor.href = url;
   anchor.download = filename;
@@ -68,6 +85,51 @@ export function downloadBlob(blob: Blob, filename: string) {
   anchor.click();
   anchor.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
+/** Prefer native share sheet on mobile (works for save/share); falls back to download/open. */
+export async function saveOrShareImageBlob(
+  blob: Blob,
+  filename: string,
+  title = 'بطاقة ولاء'
+): Promise<'shared' | 'downloaded'> {
+  const file = new File([blob], filename, { type: blob.type || 'image/png' });
+
+  if (isMobileDevice() && typeof navigator.share === 'function') {
+    try {
+      const data: ShareData = { files: [file], title };
+      if (typeof navigator.canShare !== 'function' || navigator.canShare(data)) {
+        await navigator.share(data);
+        return 'shared';
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') throw error;
+    }
+
+    try {
+      await navigator.share({ files: [file] });
+      return 'shared';
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') throw error;
+    }
+  }
+
+  downloadBlob(blob, filename);
+  return 'downloaded';
+}
+
+export function openSms(phone: string, message: string): boolean {
+  const digits = toDigits(phone);
+  if (!digits) return false;
+  // iOS wants &body=, Android wants ?body=
+  const joiner = /iPhone|iPad|iPod/i.test(navigator.userAgent) ? '&' : '?';
+  const url = `sms:${digits}${joiner}body=${encodeURIComponent(message)}`;
+  try {
+    window.location.href = url;
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export type ShareQrResult = 'shared' | 'clipboard' | 'downloaded';
