@@ -1,7 +1,8 @@
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { LogIn, Lock, User } from 'lucide-react';
+import { Eye, EyeOff, LogIn, Lock, User } from 'lucide-react';
 import { BrandLogo, Button, Icon, Input } from '@shared/components';
 import { AuthShell } from '../components/AuthShell';
 import { loginSchema, type LoginSchema } from '../schemas/login.schema';
@@ -12,6 +13,7 @@ export const LoginPage = () => {
   const location = useLocation();
   const { isAuthenticated, login, isLoggingIn } = useAuth();
   const [searchParams] = useSearchParams();
+  const [showPassword, setShowPassword] = useState(false);
   const accessReason = searchParams.get('reason');
   const from =
     (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ||
@@ -95,13 +97,27 @@ export const LoginPage = () => {
             <Icon icon={Lock} size="sm" className="text-muted" />
             كلمة المرور
           </label>
-          <Input
-            type="password"
-            autoComplete="current-password"
-            placeholder="••••••••"
-            error={errors.password?.message}
-            {...register('password')}
-          />
+          <div className="relative">
+            <Input
+              type={showPassword ? 'text' : 'password'}
+              autoComplete="current-password"
+              placeholder="••••••••"
+              className="pl-11"
+              {...register('password')}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((prev) => !prev)}
+              className="absolute left-2 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-muted transition-colors hover:bg-surface hover:text-ink"
+              aria-label={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
+              aria-pressed={showPassword}
+            >
+              <Icon icon={showPassword ? EyeOff : Eye} size="sm" />
+            </button>
+          </div>
+          {errors.password?.message && (
+            <p className="mt-1.5 text-sm text-danger">{errors.password.message}</p>
+          )}
         </div>
 
         <Button type="submit" className="w-full" size="lg" disabled={isLoggingIn}>
